@@ -49,7 +49,7 @@ controls.dampingFactor = 0.12;
 
 const VIEWS = {
   // direzione di osservazione da sud-est, distanza calcolata per inquadrare tutto
-  axo: { kind: 'orbit', dir: [0.62, 0.52, 0.59], target: [5.3, 1.6, 2.4], fit: [13.2, 9.6], vfov: 36 },
+  axo: { kind: 'orbit', dir: [0.62, 0.52, 0.59], target: [5.3, 1.8, 2.4], fit: [14, 10.6], vfov: 36 },
   planGround: { kind: 'plan', cut: 140 },
   planMezz: { kind: 'plan', cut: 450 },
   section: { kind: 'section', z: 256 },
@@ -667,6 +667,11 @@ function build() {
     ready: true,
   };
 }
+
+// lo sfondo della scena segue il tema chiaro/scuro della pagina
+const retheme = () => W && setLight(state.light);
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
 resize();
 updateHint();
