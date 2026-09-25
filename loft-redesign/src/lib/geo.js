@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export const CM = 0.01;
 
@@ -41,6 +42,96 @@ export function boxAt(mat, x0, y0, z0, x1, y1, z1) {
 export function boxGeoAt(x0, y0, z0, x1, y1, z1) {
   const g = boxGeo(Math.abs(x1 - x0) * CM, Math.abs(y1 - y0) * CM, Math.abs(z1 - z0) * CM);
   g.translate(((x0 + x1) / 2) * CM, ((y0 + y1) / 2) * CM, ((z0 + z1) / 2) * CM);
+  return g;
+}
+
+// Box con spigoli arrotondati (imbottiti, cuscini), UV in metri.
+export function roundBoxGeo(w, h, d, r, seg = 2) {
+  const g = new RoundedBoxGeometry(w * CM, h * CM, d * CM, seg, r * CM);
+  const uv = g.attributes.uv;
+  const n = uv.count / 6;
+  const dims = [
+    [d, h],
+    [d, h],
+    [w, d],
+    [w, d],
+    [w, h],
+    [w, h],
+  ];
+  for (let i = 0; i < uv.count; i++) {
+    const f = Math.min(5, Math.floor(i / n));
+    uv.setXY(i, uv.getX(i) * dims[f][0] * CM, uv.getY(i) * dims[f][1] * CM);
+  }
+  return g;
+}
+
+export function roundBoxAt(x0, y0, z0, x1, y1, z1, r, seg = 2) {
+  const g = roundBoxGeo(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0), r, seg);
+  g.translate(((x0 + x1) / 2) * CM, ((y0 + y1) / 2) * CM, ((z0 + z1) / 2) * CM);
+  return g;
+}
+
+// Lastra orizzontale a forma di ovale (stadio) w × d, da y0 a y1, centrata.
+export function stadiumGeo(w, d, y0, y1, bevel = 0) {
+  const r = Math.min(w, d) / 2;
+  const a = (w - 2 * r) / 2;
+  const s = new THREE.Shape();
+  s.moveTo(-a * CM, -r * CM);
+  s.lineTo(a * CM, -r * CM);
+  s.absarc(a * CM, 0, r * CM, -Math.PI / 2, Math.PI / 2, false);
+  s.lineTo(-a * CM, r * CM);
+  s.absarc(-a * CM, 0, r * CM, Math.PI / 2, (3 * Math.PI) / 2, false);
+  const b = Math.min(bevel, (y1 - y0) / 2);
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth: (y1 - y0 - 2 * b) * CM,
+    bevelEnabled: b > 0,
+    bevelThickness: b * CM,
+    bevelSize: b * CM,
+    bevelSegments: 3,
+    curveSegments: 24,
+  });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, (y0 + b) * CM, 0);
+  return g;
+}
+
+// Disco orizzontale (tavoli tondi) con bordo smussato.
+export function discGeo(r, y0, y1, bevel = 0, seg = 48) {
+  const s = new THREE.Shape();
+  s.absarc(0, 0, (r - bevel) * CM, 0, Math.PI * 2, false);
+  const b = Math.min(bevel, (y1 - y0) / 2);
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth: (y1 - y0 - 2 * b) * CM,
+    bevelEnabled: b > 0,
+    bevelThickness: b * CM,
+    bevelSize: b * CM,
+    bevelSegments: 3,
+    curveSegments: seg,
+  });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, (y0 + b) * CM, 0);
+  return g;
+}
+
+// Fascia ad arco (schienali avvolgenti): corona circolare tra rIn e rOut,
+// centrata sulla direzione -z (dietro), ampia 2·half radianti, da y0 a y1.
+export function arcBandGeo(rOut, rIn, half, y0, y1, bevel = 0, seg = 24) {
+  const a0 = Math.PI / 2 - half;
+  const a1 = Math.PI / 2 + half;
+  const s = new THREE.Shape();
+  s.absarc(0, 0, rOut * CM, a0, a1, false);
+  s.absarc(0, 0, rIn * CM, a1, a0, true);
+  const b = Math.min(bevel, (y1 - y0) / 2, (rOut - rIn) / 2 - 0.1);
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth: (y1 - y0 - 2 * b) * CM,
+    bevelEnabled: b > 0,
+    bevelThickness: b * CM,
+    bevelSize: b * CM,
+    bevelSegments: 4,
+    curveSegments: seg,
+  });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, (y0 + b) * CM, 0);
   return g;
 }
 

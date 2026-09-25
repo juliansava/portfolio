@@ -125,9 +125,6 @@ export function buildKitchen(M, lamps) {
   info(stub, 'Setto in mattoni', `Divide la cucina dall'open space, ${st.z1 - st.z0} cm`);
   g.add(stub);
 
-  // Tavolino tondo in marmo su piede in ghisa
-  g.add(place(marbleTable(M), 748, 0, 318));
-
   // Lampade a sospensione in vetro prismatico
   for (const z of [318, 380]) {
     const p = pendant(M);
@@ -149,6 +146,26 @@ export function buildKitchen(M, lamps) {
   place(sh, ax, 208, 474);
   g.add(sh);
   lamps.push({ x: ax, y: 205, z: 474, color: '#ffcf8f', power: 1.2, dist: 3.5 });
+
+  // Tubo della cappa lungo il muro sud dell'ala est (foto soppalco 2)
+  const pipe = new THREE.Mesh(
+    tubeGeo(
+      [
+        [S.mainLength + 30, S.mezzTop + 12, S.depth - 20],
+        [1000, S.mezzTop + 12, S.depth - 24],
+        [1080, S.mezzTop + 14, S.depth - 40],
+        [1085, S.mezzTop + 40, S.depth - 60],
+      ],
+      9,
+      40,
+      12,
+      0.3,
+    ),
+    M.steelMatte,
+  );
+  info(pipe, 'Tubo di aspirazione', "Uscita della cappa, lungo il muro sud dell'ala est");
+  pipe.userData.level = 'mezz';
+  g.add(pipe);
 
   return g;
 }

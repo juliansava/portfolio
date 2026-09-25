@@ -1,14 +1,30 @@
 // Passeggiata in prima persona: WASD e mouse su desktop, trascinamento e
-// pulsanti su touch. La scala si percorre camminando.
+// pulsanti su touch. Tre livelli (piano terra, open space, soppalco): le
+// scale si percorrono camminando.
+//
+// Ogni ostacolo ha un ingombro in pianta e un'estensione verticale; il corpo
+// occupa da 12 a 170 cm sopra i piedi, quindi si passa sotto le rampe alte e
+// si scavalcano soglie e tappeti. Gli arredi diventano ostacoli da soli, dal
+// loro ingombro.
 
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { S } from '../survey.js';
-import { stairHeightAt } from '../model/stair.js';
-import { MEZZ_OUTLINE } from '../model/structure.js';
+import { S, roofY } from '../survey.js';
+import { stairHeights, Y_LANDING } from '../model/stair.js';
+import { mezzOutline } from '../model/structure.js';
+import { BATH } from '../model/project.js';
+import { BOILER } from '../model/shell.js';
 
 const R = 18; // raggio del corpo, cm
 const EYE = 160;
+const FEET = 12;
+const HEAD = 170;
+const G = S.ground.level;
+const MT = S.mezzTop;
+const L = S.totalLength;
+const D = S.depth;
+const HALL = S.ground.hall;
+const SW = S.stairwell;
 
 function insidePoly(poly, x, z) {
   let inside = false;
@@ -20,57 +36,94 @@ function insidePoly(poly, x, z) {
   return inside;
 }
 
-// Ostacoli [x0, x1, z0, z1, livello, valeSullaScala] in cm.
-// livello: 'g' piano, 'm' soppalco.
-function obstacles(withFurniture) {
+// Ostacoli fissi [x0, x1, z0, z1, y0, y1, livello?] in cm. Il livello, se
+// c'è, limita l'ostacolo a chi cammina a quella quota (sotto le rampe).
+function fixedObstacles(scenario) {
   const o = [];
-  const g = (x0, x1, z0, z1, stair = false) => o.push([x0, x1, z0, z1, 'g', stair]);
-  const m = (x0, x1, z0, z1) => o.push([x0, x1, z0, z1, 'm', false]);
+  const add = (x0, x1, z0, z1, y0, y1, lvl) => o.push([x0, x1, z0, z1, y0, y1, lvl]);
   const x = S.mainLength;
-  g(x, S.rightX0, 0, S.bathDoor.z0);
-  g(x, S.rightX0, S.bathDoor.z1, S.depth);
-  g(S.rightX0, S.rightX0 + 20, 100, 110);
-  g(S.rightX0 + 111, S.rightX1, 100, 110);
-  const p = S.parapet;
-  g(p.x, p.x + p.t, p.z0 - 12, p.z1, true);
-  g(S.lift.x0, S.lift.x1, S.lift.z0, S.lift.z1, true);
-  g(0, 139, S.corridorW, S.mezzEdgeZ); // sotto la scala: altezza insufficiente
-  for (const c of S.columns) g(c.x - 8, c.x + 8, c.z - 14, c.z + 2);
-  const ch = S.chimney;
-  g(ch.x0, ch.x1, 0, ch.depth);
-  const st = S.kitchenStub;
-  g(st.x - 13, st.x + 13, st.z0, st.z1);
-  g(808, x, 214, 497); // cucina
-  g(702, 762, 435, 500); // frigo
-  for (const px of S.southPilasters) g(px - 25, px + 25, 495, 500);
-  g(1009, S.rightX1, 110, 198); // doccia
-  g(1037, S.rightX1, 280, 320);
-  g(1049, S.rightX1, 370, 430);
-  for (const q of S.northPilasters) m(q.x0, q.x1, 0, q.depth);
-  m(390, 690, 0, 36);
-  m(120, 320, 0, 36);
-  m(S.mainLength, S.rightX1, 372, S.depth); // falda troppo bassa
-  // parapetti del soppalco
-  m(S.stairOpeningEndX + 6, S.mainLength, S.mezzEdgeZ - 4, S.mezzEdgeZ);
-  m(S.mainLength - 4, S.mainLength, S.mezzEdgeZ, S.depth);
-  m(0, S.stairOpeningEndX, S.corridorW, S.corridorW + 4);
-  if (withFurniture) {
-    g(120, 304, 218, 306); // tavolo
-    g(180, 310, 30, 98);
-    g(327, 443, 28, 90);
-    g(443, 557, 4, 56);
-    g(570, 654, 18, 70);
-    g(815, 868, 0, 115);
-    g(351, 433, 147, 197);
-    g(583, 673, 124, 176);
-    g(535, 609, 390, 446);
-    g(632, 704, 398, 442);
-    g(605, 695, 235, 289);
-    g(100, 136, 268, 332);
-    g(365, 430, 425, 490);
-    g(445, 510, 420, 485);
+  const top = S.mezzUnder;
+  // tramezzo con la porta dei servizi, muro tra ripostiglio e bagno
+  add(x, S.rightX0, 0, S.bathDoor.z0, 0, top);
+  add(x, S.rightX0, S.bathDoor.z1, D, 0, top);
+  add(S.rightX0, S.rightX0 + 20, 100, 110, 0, top);
+  add(S.rightX0 + 111, S.rightX1, 100, 110, 0, top);
+  add(S.rightX0 + 20, S.rightX0 + 111, 100, 110, 210, top);
+  if (scenario === 'project') {
+    const n = BATH.niche;
+    add(n.x0, n.x0 + 8, n.z0, n.z1, 0, top);
+    add(S.rightX0, BATH.door.x0, BATH.wallZ, BATH.wallZ + 10, 0, top);
+    add(BATH.door.x1, n.x0 + 8, BATH.wallZ, BATH.wallZ + 10, 0, top);
+    add(BATH.door.x0 - 2, BATH.door.x0 + 3, BATH.wallZ + 10, BATH.wallZ + 90, 0, 210); // anta aperta
+    add(n.x0 + 8, S.rightX1, n.z0, n.z1, 0, top); // doccia
+  } else {
+    add(S.rightX0 + 114, S.rightX0 + 205, 110, 113, 0, 209);
   }
+  // parapetto, gabbia d'arrivo e anta aperta
+  const p = S.parapet;
+  add(p.x, p.x + p.t, p.z0, p.z1, 0, p.h - 15); // chi sale sui ventagli lo sfiora coi piedi
+  const a = S.arrival;
+  add(a.x1 - 4, a.x1, a.z0, a.door.z0, 0, a.h);
+  add(a.x1 - 4, a.x1, a.door.z1, a.z1, 0, a.h);
+  add(a.x1, a.x1 + 88, a.door.z1 - 4, a.door.z1 + 2, 0, 212);
+  // sotto la rampa del soppalco: altezza insufficiente (fino a 45 cm, così
+  // chi sta sui gradini a blocco o sui ventagli non ne è bloccato)
+  add(0, 205, S.corridorW, S.mezzEdgeZ, 0, 45, 0);
+  add(250, 260, S.mezzEdgeZ - 10, S.mezzEdgeZ - 2, 0, 250);
+  for (const c of S.columns) add(c.x - 8, c.x + 8, c.z - 14, c.z + 2, 0, top);
+  const ch = S.chimney;
+  add(ch.x0, ch.x1, 0, ch.depth, G, top);
+  for (const px of S.southPilasters) add(px - 25, px + 25, 495, D, 0, 430);
+  for (const q of S.northPilasters) add(q.x0, q.x1, 0, q.depth, MT, MT + 300);
+  // parapetti del soppalco
+  const m0 = MT;
+  const m1 = MT + 100;
+  add(0, S.stairOpeningEndX, S.corridorW, S.corridorW + 4, m0, m1);
+  if (scenario === 'project') {
+    const gx = S.glassExt;
+    add(S.stairOpeningEndX + 6, gx.x0, S.mezzEdgeZ - 4, S.mezzEdgeZ, m0, m1);
+    add(gx.x0 - 4, gx.x0, S.mezzEdgeZ, gx.z1, m0, m1);
+    add(gx.x0, x + 4, gx.z1 - 4, gx.z1, m0, m1);
+    add(x, x + 4, gx.z1, D, m0, m1);
+  } else {
+    add(S.stairOpeningEndX + 6, x, S.mezzEdgeZ - 4, S.mezzEdgeZ, m0, m1);
+    add(x, x + 4, S.mezzEdgeZ, D, m0, m1);
+  }
+  add(x, L, 372, D, m0, m1); // falda troppo bassa
+  // piano terra: muro dell'atrio, caldaia, scala a U
+  add(BOILER.x0, BOILER.x1, BOILER.z0, BOILER.z1, G, -30);
+  const f1 = S.groundStair.first;
+  add(f1.x0, f1.x1, f1.zEnd, 400, G, G + 50, G); // sotto la prima rampa
+  add(f1.x1, f1.x1 + 5, S.groundStair.landing.z0, f1.zStart - 10, G + 20, Y_LANDING + 100); // corrimano
+  add(S.groundStair.second.x1, S.groundStair.second.x1 + 3, S.groundStair.second.zStart - 6, SW.z1, Y_LANDING, 100);
   return o;
+}
+
+// Ingombri degli arredi, dai figli dei gruppi indicati.
+function furnitureObstacles(groups) {
+  const out = [];
+  const box = new THREE.Box3();
+  for (const grp of groups) {
+    if (!grp) continue;
+    for (const c of grp.children) {
+      if (c.userData.noCollide || c.isLight) continue;
+      if (c.userData.foot) {
+        // lampade da terra: conta solo la base
+        const p = c.getWorldPosition(new THREE.Vector3()).multiplyScalar(100);
+        const r = c.userData.foot;
+        out.push([p.x - r, p.x + r, p.z - r, p.z + r, p.y, p.y + 170]);
+        continue;
+      }
+      box.setFromObject(c);
+      if (box.isEmpty()) continue;
+      const b = [box.min.x * 100, box.max.x * 100, box.min.z * 100, box.max.z * 100, box.min.y * 100, box.max.y * 100];
+      if (b[5] - b[4] < 4) continue; // tappeti e simili
+      // quadri, specchi e tende: sottili, non fermano il passo
+      if (Math.min(b[1] - b[0], b[3] - b[2]) < 7) continue;
+      out.push(b);
+    }
+  }
+  return out;
 }
 
 export class Walker {
@@ -86,7 +139,9 @@ export class Walker {
     this.vel = new THREE.Vector2();
     this.keys = new Set();
     this.pad = { fwd: false, back: false };
-    this.withFurniture = true;
+    this.scenario = 'project';
+    this.groups = [];
+    this.obs = [];
     this.lock = new PointerLockControls(camera, dom);
     this.lock.addEventListener('unlock', () => {
       if (this.active && !this.touch) this.exit();
@@ -116,36 +171,52 @@ export class Walker {
     window.addEventListener('pointerup', () => (last = null));
   }
 
-  setFurniture(v) {
-    this.withFurniture = v;
-    this.obs = obstacles(v);
+  // scenario: 'current' | 'project'; groups: gruppi i cui figli fanno ingombro
+  configure(scenario, groups) {
+    this.scenario = scenario;
+    this.groups = groups;
+    this.mezz = mezzOutline(scenario);
+    this.obs = [...fixedObstacles(scenario), ...furnitureObstacles(groups)];
   }
 
   enter() {
-    this.obs = obstacles(this.withFurniture);
+    this.configure(this.scenario, this.groups);
     const c = this.camera.position;
     const x = c.x * 100;
     const z = c.z * 100;
-    const inside = x > 20 && x < S.totalLength - 20 && z > 20 && z < S.depth - 20;
-    let y = 0;
-    if (inside && c.y * 100 > S.mezzTop + 60 && insidePoly(MEZZ_OUTLINE, x, z)) y = S.mezzTop;
-    if (inside && this.free(x, z, y)) {
+    const y = c.y * 100;
+    let start = null;
+    const candidates = [];
+    if (y < -40 && x > HALL.x0 && x < HALL.x1 && z > HALL.z0 && z < HALL.z1) candidates.push(G);
+    else if (y > MT + 60) candidates.push(MT, 0);
+    else candidates.push(0);
+    for (const h of candidates) {
+      if (this.level(x, z, h) === h && this.free(x, z, h)) {
+        start = h;
+        break;
+      }
+    }
+    if (start !== null) {
       this.pos.set(x, z);
-      this.y = y;
+      this.y = start;
     } else {
-      this.pos.set(560, 300);
-      this.y = 0;
+      // punti di partenza di riserva: davanti al portoncino, fuori dalla gabbia
+      const spots = y < -40 ? [[60, 440, G], [250, 440, G]] : [[300, 440, 0], [560, 150, 0], [150, 440, 0]];
+      const ok = spots.find(([sx, sz, sy]) => this.free(sx, sz, sy)) || spots[0];
+      this.pos.set(ok[0], ok[1]);
+      this.y = ok[2];
     }
     // sguardo orizzontale nella direzione attuale
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
-    const yaw = inside ? Math.atan2(-dir.x, -dir.z) : Math.PI / 2;
+    // di riserva: al piano terra si guarda verso la scala (nord), sopra verso est
+    const yaw = start !== null ? Math.atan2(-dir.x, -dir.z) : y < -40 ? 0 : -Math.PI / 2;
     this.camera.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
     this.camera.fov = 70;
     this.camera.updateProjectionMatrix();
     this.active = true;
     this.vel.set(0, 0);
-    this.place();
+    this.place(true);
     if (!this.touch) this.lock.lock();
   }
 
@@ -158,29 +229,52 @@ export class Walker {
     this.onExit?.();
   }
 
-  // Quota del pavimento raggiungibile in (x, z) partendo da y, o null.
-  level(x, z, y) {
-    const s = stairHeightAt(x, z);
-    if (s !== null && Math.abs(s - y) < 45) return s;
-    if (y > 250) return insidePoly(MEZZ_OUTLINE, x, z) ? S.mezzTop : null;
-    return 0;
+  // Pavimenti in (x, z): piano terra nell'atrio, piano principale fuori dal
+  // vano scala, soppalco dentro il suo contorno.
+  floorsAt(x, z) {
+    const out = [];
+    if (x >= HALL.x0 && x <= HALL.x1 && z >= HALL.z0 && z <= HALL.z1) out.push(G);
+    const inHole = x < SW.x1 && z > SW.z0 && z < SW.z1;
+    if (!inHole && x >= 0 && x <= L && z >= 0 && z <= D) out.push(0);
+    if (insidePoly(this.mezz, x, z)) out.push(MT);
+    return out;
   }
 
-  // onStair: il punto è sull'ingombro della scala alla quota del corpo
-  free(x, z, y, onStair = this.onStairAt(x, z, y)) {
-    if (x < R || z < R || x > S.totalLength - R || z > S.depth - R) return false;
-    const lvl = y > 250 ? 'm' : 'g';
-    for (const [x0, x1, z0, z1, l, stair] of this.obs) {
-      // sulla scala valgono solo parapetto e ascensore
-      if (onStair ? !stair : l !== lvl) continue;
+  // Quota raggiungibile in (x, z) partendo da y, o null: le scale hanno la
+  // precedenza, poi il pavimento più vicino entro un gradino.
+  level(x, z, y) {
+    let best = null;
+    for (const h of stairHeights(x, z)) {
+      if (Math.abs(h - y) < 45 && (best === null || Math.abs(h - y) < Math.abs(best - y))) best = h;
+    }
+    if (best !== null) return best;
+    for (const h of this.floorsAt(x, z)) if (Math.abs(h - y) < 45) return h;
+    return null;
+  }
+
+  free(x, z, y) {
+    const ground = y < -100;
+    const [ax, bx, az, bz] = ground ? [HALL.x0, HALL.x1, HALL.z0, HALL.z1] : [0, L, 0, D];
+    if (x < ax + R || z < az + R || x > bx - R || z > bz - R) return false;
+    const y0 = y + FEET;
+    // sotto il solaio basso ci si china: conta il soffitto, non la statura
+    const y1 = Math.min(y + HEAD, this.ceiling(x, z, y) - 5);
+    for (const [x0, x1, z0, z1, oy0, oy1, lvl] of this.obs) {
+      if (oy1 <= y0 || oy0 >= y1) continue;
+      if (lvl !== undefined && Math.abs(y - lvl) > 60) continue;
       if (x > x0 - R && x < x1 + R && z > z0 - R && z < z1 + R) return false;
     }
     return true;
   }
 
-  onStairAt(x, z, y) {
-    const s = stairHeightAt(x, z);
-    return s !== null && Math.abs(s - y) < 45 && y > 5;
+  // Soffitto sopra la testa: solaio basso al piano terra, falda sul soppalco.
+  ceiling(x, z, y) {
+    if (y < -100) {
+      const inHole = x < SW.x1 && z > SW.z0 && z < SW.z1;
+      return inHole ? Infinity : -S.ground.slab;
+    }
+    if (y > MT - 60) return roofY(z);
+    return Infinity;
   }
 
   update(dt) {
@@ -206,8 +300,7 @@ export class Walker {
     const nz = this.pos.y + this.vel.y;
     const tryAt = (x, z) => {
       const ny = this.level(x, z, this.y);
-      if (ny === null) return false;
-      if (!this.free(x, z, ny, this.onStairAt(x, z, ny))) return false;
+      if (ny === null || !this.free(x, z, ny)) return false;
       this.pos.set(x, z);
       this.y = ny;
       return true;
@@ -217,11 +310,12 @@ export class Walker {
     return true;
   }
 
-  place() {
-    const eyeY = this.y + EYE;
+  place(snap = false) {
+    const ceil = this.ceiling(this.pos.x, this.pos.y, this.y);
+    const eyeY = Math.min(this.y + EYE, ceil - 14);
     const cur = this.camera.position.y * 100;
     // morbidezza sui gradini
-    const y = Math.abs(cur - eyeY) < 60 ? cur + (eyeY - cur) * 0.35 : eyeY;
+    const y = !snap && Math.abs(cur - eyeY) < 60 ? cur + (eyeY - cur) * 0.35 : eyeY;
     this.camera.position.set(this.pos.x / 100, y / 100, this.pos.y / 100);
     this.onMove?.();
   }

@@ -1,11 +1,13 @@
 // Struttura in acciaio e soppalco: impalcato, pilastri, travi, parapetti,
-// parapetto in mattoni della scala, cancelletto e ascensore.
+// parapetto in mattoni del vano scala e gabbia d'arrivo della scala dal
+// piano terra. Nel progetto: ampliamento del soppalco con piano in vetro.
 
 import * as THREE from 'three';
 import { S, roofY } from '../survey.js';
 import { CM, boxAt, boxGeoAt, cylAt, cylGeoAt, prismGeo, rodGeo, Batch, info } from '../lib/geo.js';
 
 const D = S.depth;
+const GX = S.glassExt;
 
 // Contorno dell'impalcato del soppalco (x, z in cm): corridoio a nord della
 // scala, soppalco principale fino al filo 212 e ala est sopra i servizi.
@@ -19,6 +21,22 @@ export const MEZZ_OUTLINE = [
   [S.stairOpeningEndX, S.corridorW],
   [0, S.corridorW],
 ];
+
+// Progetto: lo stesso contorno con l'aggiunta in vetro tra pilastro 2 e ala est.
+export const MEZZ_OUTLINE_PROJECT = [
+  [0, 0],
+  [S.totalLength, 0],
+  [S.totalLength, D],
+  [S.mainLength, D],
+  [S.mainLength, GX.z1],
+  [GX.x0, GX.z1],
+  [GX.x0, S.mezzEdgeZ],
+  [S.stairOpeningEndX, S.mezzEdgeZ],
+  [S.stairOpeningEndX, S.corridorW],
+  [0, S.corridorW],
+];
+
+export const mezzOutline = (scenario) => (scenario === 'project' ? MEZZ_OUTLINE_PROJECT : MEZZ_OUTLINE);
 
 export function buildMezzanine(M) {
   const g = new THREE.Group();
@@ -44,7 +62,7 @@ export function buildMezzanine(M) {
   for (const x of [345, 722]) {
     beams.add(boxGeoAt(x - 5.5, S.mezzUnder, S.mezzEdgeZ, x + 5.5, S.mezzUnder + S.beamH, D), M.steel);
   }
-  // Trave lungo il muro ovest (regge la puleggia dell'ascensore)
+  // Trave lungo il muro ovest, sopra il vano scala (foto 7)
   beams.add(boxGeoAt(0, 314, S.mezzEdgeZ, 11, 336, D), M.steel);
   const beamGroup = beams.build('Travi');
   info(beamGroup, 'Travi in acciaio', 'IPE 220 verniciate nere: catene sul vuoto in asse con i pilastri');
@@ -62,17 +80,15 @@ export function buildMezzanine(M) {
     g.add(col);
   }
 
-  // Parapetti del soppalco
-  g.add(buildRailings(M));
   return g;
 }
 
-function mezzArea() {
+function mezzArea(poly = MEZZ_OUTLINE) {
   // area del poligono (formula di Gauss), in m²
   let a = 0;
-  for (let i = 0; i < MEZZ_OUTLINE.length; i++) {
-    const [x1, z1] = MEZZ_OUTLINE[i];
-    const [x2, z2] = MEZZ_OUTLINE[(i + 1) % MEZZ_OUTLINE.length];
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, z1] = poly[i];
+    const [x2, z2] = poly[(i + 1) % poly.length];
     a += x1 * z2 - x2 * z1;
   }
   return (Math.abs(a) / 2 / 10000).toFixed(1).replace('.', ',');
@@ -105,22 +121,67 @@ function railRun(batch, M, a, b, { base = S.mezzTop, h = 100, postEvery = 95, ra
   }
 }
 
-function buildRailings(M) {
+// Parapetti del soppalco. Nel progetto il filo sud gira attorno
+// all'ampliamento in vetro; lo stile resta quello esistente.
+export function buildRailings(M, scenario) {
   const b = new Batch();
   const e = S.mezzEdgeZ - 3;
-  // filo sud del soppalco principale, dal pilastro 1 all'angolo della cucina
-  railRun(b, M, [S.stairOpeningEndX + 6, e], [S.mainLength - 3, e]);
-  // filo ovest dell'ala est, sopra la cucina, fino alla falda
-  railRun(b, M, [S.mainLength + 3, e], [S.mainLength + 3, D - 2], { postEvery: 95 });
+  const x = S.mainLength;
+  if (scenario === 'project') {
+    railRun(b, M, [S.stairOpeningEndX + 6, e], [GX.x0 - 3, e]);
+    railRun(b, M, [GX.x0 - 3, e], [GX.x0 - 3, GX.z1 - 3]);
+    railRun(b, M, [GX.x0 - 3, GX.z1 - 3], [x + 3, GX.z1 - 3]);
+    railRun(b, M, [x + 3, GX.z1 - 3], [x + 3, D - 2]);
+  } else {
+    // filo sud del soppalco principale, dal pilastro 1 all'angolo della cucina
+    railRun(b, M, [S.stairOpeningEndX + 6, e], [x - 3, e]);
+    // filo ovest dell'ala est, sopra la cucina, fino alla falda
+    railRun(b, M, [x + 3, e], [x + 3, D - 2], { postEvery: 95 });
+  }
   // lato corridoio del vano scala: bacchette fitte
   railRun(b, M, [0, S.corridorW + 3], [S.stairOpeningEndX, S.corridorW + 3], { rails: [], balusters: 11 });
   const g = b.build('Parapetti');
   info(g, 'Parapetti del soppalco', 'Ferro nero, h 100 cm, corrimano tondo e correnti intermedi');
+  g.userData.level = 'mezz';
+  return g;
+}
+
+// Ampliamento del soppalco (progetto): telaio in acciaio a sbalzo dal
+// pilastro 2 e dall'ala est, piano in vetro stratificato calpestabile.
+export function buildGlassExtension(M) {
+  const g = new THREE.Group();
+  g.name = 'ampliamento in vetro';
+  const b = new Batch();
+  const y0 = S.mezzUnder;
+  const y1 = S.mezzTop;
+  // travi di bordo e traverso intermedio
+  b.add(boxGeoAt(GX.x0 - 5.5, y0, S.mezzEdgeZ, GX.x0 + 5.5, y1 - 3, GX.z1), M.steel);
+  b.add(boxGeoAt(GX.x0 - 5.5, y0, GX.z1 - 11, GX.x1, y1 - 3, GX.z1), M.steel);
+  b.add(boxGeoAt(GX.x1 - 9, y0, S.mezzEdgeZ, GX.x1, y1 - 3, GX.z1), M.steel);
+  const mid = (GX.x0 + GX.x1) / 2;
+  b.add(boxGeoAt(mid - 4, y0 + 8, S.mezzEdgeZ, mid + 4, y1 - 3, GX.z1 - 11), M.steel);
+  // battuta del vetro
+  for (const [a0, c0, a1, c1] of [
+    [GX.x0 + 5.5, S.mezzEdgeZ, GX.x1 - 9, S.mezzEdgeZ + 3],
+    [GX.x0 + 5.5, GX.z1 - 14, GX.x1 - 9, GX.z1 - 11],
+  ]) {
+    b.add(boxGeoAt(a0, y1 - 5, c0, a1, y1 - 3, c1), M.steel);
+  }
+  g.add(b.build('Telaio ampliamento'));
+  const glass = boxAt(M.glassFloor, GX.x0 + 5.5, y1 - 3, S.mezzEdgeZ, GX.x1 - 9, y1, GX.z1 - 11);
+  glass.userData.noShadow = true;
+  g.add(glass);
+  info(
+    g,
+    'Ampliamento del soppalco',
+    `${GX.x1 - GX.x0} × ${GX.z1 - GX.z0} cm, telaio in acciaio a sbalzo, vetro stratificato calpestabile; superficie del soppalco ${mezzArea(MEZZ_OUTLINE_PROJECT)} m²`,
+  );
+  g.userData.level = 'mezz';
   return g;
 }
 
 // ---------------------------------------------------------------------------
-// Parapetto in mattoni, cancelletto curvo, ascensore
+// Parapetto in mattoni del vano scala e gabbia d'arrivo
 
 export function buildStairEnclosure(M) {
   const g = new THREE.Group();
@@ -128,32 +189,70 @@ export function buildStairEnclosure(M) {
   const p = S.parapet;
 
   const wall = boxAt(M.brickNew, p.x, 0, p.z0, p.x + p.t, p.h, p.z1);
-  info(wall, 'Parapetto in mattoni', `Listelli di laterizio, h ${p.h} cm, lungo ${p.z1 - p.z0} cm`);
+  info(wall, 'Parapetto in mattoni', `Listelli di laterizio, h ${p.h} cm, lungo ${p.z1 - p.z0} cm: protegge il vano della scala dal piano terra`);
   g.add(wall);
-  const pier = boxAt(M.brickNew, p.x - 2, 0, p.z0 - 12, p.x + 24, p.h + 8, p.z0 + 12);
-  info(pier, 'Pilastrino in mattoni', 'Testa del parapetto verso il soppalco');
-  g.add(pier);
-  // pulsantiera di chiamata ascensore sulla testa sud del parapetto
-  g.add(boxAt(M.plasticBlack, p.x + p.t, 88, p.z1 - 10, p.x + p.t + 2, 102, p.z1 - 3));
-  g.add(boxAt(M.red, p.x + p.t + 2, 93, p.z1 - 8, p.x + p.t + 2.8, 97, p.z1 - 5));
+  // scatola degli interruttori sulla testa verso la gabbia (foto 3)
+  g.add(boxAt(M.plasticBlack, p.x + p.t, 88, p.z1 - 12, p.x + p.t + 2, 102, p.z1 - 5));
+  g.add(boxAt(M.red, p.x + p.t + 2, 93, p.z1 - 10, p.x + p.t + 2.8, 97, p.z1 - 7));
 
-  g.add(buildGate(M));
-  g.add(buildLift(M));
+  g.add(buildArrival(M));
   return g;
 }
 
-function buildGate(M) {
-  // Cancelletto curvo chiuso tra la testa del parapetto e l'ascensore (foto 3):
-  // corda 64 cm, freccia 16 cm verso la stanza.
-  const p = S.parapet;
-  const z0 = p.z1;
-  const z1 = S.lift.z0;
-  const chord = z1 - z0;
+// Gabbia in ferro nell'angolo sud-ovest: chiude lo sbarco della scala dal
+// piano terra. Aperta verso nord (vano scala), porta sul lato est.
+function buildArrival(M) {
+  const l = S.arrival;
+  const dr = l.door;
+  const g = new THREE.Group();
+  g.name = 'gabbia d\'arrivo';
+  const b = new Batch();
+  const t = 4;
+  for (const [x, z] of [
+    [l.x1 - t, l.z0],
+    [l.x1 - t, l.z1 - t],
+    [l.x0, l.z0],
+  ]) {
+    b.add(boxGeoAt(x, 0, z, x + t, l.h, z + t), M.steel);
+  }
+  // telaio in alto e cielino
+  b.add(boxGeoAt(l.x0, l.h - 6, l.z0, l.x1, l.h, l.z0 + t), M.steel);
+  b.add(boxGeoAt(l.x1 - t, l.h - 6, l.z0, l.x1, l.h, l.z1), M.steel);
+  b.add(boxGeoAt(l.x0, l.h, l.z0, l.x1, l.h + 4, l.z1), M.steelMatte);
+  // lato est: montanti della porta, traverso, soglia
+  b.add(boxGeoAt(l.x1 - 3, 0, dr.z0 - 5, l.x1, l.h - 6, dr.z0), M.steel);
+  b.add(boxGeoAt(l.x1 - 3, 0, dr.z1, l.x1, l.h - 6, dr.z1 + 5), M.steel);
+  b.add(boxGeoAt(l.x1 - 3, 214, dr.z0, l.x1, 220, dr.z1), M.steel);
+  // anta aperta verso la stanza, incernierata a sud
+  const leaf = new Batch();
+  const lw = dr.z1 - dr.z0;
+  leaf.add(boxGeoAt(0, 2, -2, lw, 212, 0), M.steel);
+  const leafG = leaf.build('Anta');
+  const glass = boxAt(M.tinted, 6, 20, -2.4, lw - 6, 200, 0.4);
+  leafG.add(glass);
+  leafG.add(boxAt(M.brushed, lw - 12, 100, -6, lw - 9, 120, -2));
+  leafG.position.set(l.x1 * CM, 0, dr.z1 * CM);
+  leafG.rotation.y = 0.09; // aperta di circa 85°, verso la stanza
+  g.add(b.build('Gabbia'));
+  g.add(leafG);
+
+  // pannelli in lamiera forata: fisso a est e cielino
+  const perfE = boxAt(M.perforated, l.x1 - 2, 6, l.z0 + t, l.x1 - 1, l.h - 6, dr.z0 - 5);
+  const perfE2 = boxAt(M.perforated, l.x1 - 2, 220, dr.z0, l.x1 - 1, l.h - 6, dr.z1);
+  g.add(perfE, perfE2);
+
+  info(g, 'Gabbia d\'arrivo della scala', `${l.x1 - l.x0} × ${l.z1 - l.z0} cm, ferro nero e lamiera forata: si esce dalla porta sul lato est`);
+  return g;
+}
+
+// Cancelletto curvo su ruote (stato di fatto, foto 3): mobile, davanti al
+// parapetto vicino alla gabbia.
+export function curvedGate(M) {
+  const chord = 64;
   const sag = 16;
   const r = (chord * chord) / 4 / (2 * sag) + sag / 2;
   const half = Math.asin(chord / 2 / r);
-  const cx = p.x + p.t - (r - sag);
-  const cz = (z0 + z1) / 2;
+  const cx = -(r - sag);
   const h = 100;
   const g = new THREE.Group();
   const panel = new THREE.Mesh(
@@ -162,73 +261,24 @@ function buildGate(M) {
   );
   const uv = panel.geometry.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * r * 2 * half * CM, uv.getY(i) * h * CM);
-  panel.position.set(cx * CM, (h / 2 + 10) * CM, cz * CM);
+  panel.position.set(cx * CM, (h / 2 + 10) * CM, 0);
   g.add(panel);
   const frame = new Batch();
   const pts = [];
   const n = 20;
   for (let i = 0; i <= n; i++) {
     const a = Math.PI / 2 - half + (i / n) * 2 * half;
-    pts.push([cx + Math.sin(a) * r, cz + Math.cos(a) * r]);
+    pts.push([cx + Math.sin(a) * r, Math.cos(a) * r]);
   }
   for (const y of [10, 10 + h]) {
     for (let i = 0; i < n; i++) frame.add(rodGeo([pts[i][0], y, pts[i][1]], [pts[i + 1][0], y, pts[i + 1][1]], 1, 6), M.steel);
   }
   for (const q of [pts[0], pts[n / 2], pts[n]]) {
     frame.add(rodGeo([q[0], 3, q[1]], [q[0], 10 + h, q[1]], 1.1, 6), M.steel);
-    frame.add(cylGeoAt(q[0], 0, q[1], 2.5, 4, 12), M.rubber); // ruotine
+    frame.add(cylGeoAt(q[0], 0, q[1], 2.5, 4, 12), M.rubber);
   }
   g.add(frame.build());
-  info(g, 'Cancelletto curvo', 'Lamiera forata su ruote: chiude il varco del primo gradino (accesso da verificare)');
-  return g;
-}
-
-function buildLift(M) {
-  const l = S.lift;
-  const g = new THREE.Group();
-  g.name = 'ascensore';
-  const b = new Batch();
-  const t = 4;
-  // montanti e traversi del telaio
-  for (const [x, z] of [
-    [l.x1 - t, l.z0],
-    [l.x1 - t, l.z1 - t],
-    [l.x0, l.z0],
-  ]) {
-    b.add(boxGeoAt(x, 0, z, x + t, l.h, z + t), M.steel);
-  }
-  b.add(boxGeoAt(l.x0, l.h - 6, l.z0, l.x1, l.h, l.z0 + t), M.steel);
-  b.add(boxGeoAt(l.x1 - t, l.h - 6, l.z0, l.x1, l.h, l.z1), M.steel);
-  b.add(boxGeoAt(l.x0, 0, l.z0, l.x1, 6, l.z0 + t), M.steel);
-  // tetto della cabina
-  b.add(boxGeoAt(l.x0, l.h, l.z0, l.x1, l.h + 14, l.z1), M.steelMatte);
-  // porta sul lato est: telaio, vetro, maniglia
-  const dz0 = l.z0 + 30;
-  b.add(boxGeoAt(l.x1 - 3, 6, dz0, l.x1, l.h - 6, dz0 + 5), M.steel);
-  b.add(boxGeoAt(l.x1 - 3, 6, l.z1 - 9, l.x1, l.h - 6, l.z1 - 4), M.steel);
-  b.add(boxGeoAt(l.x1 - 3, 110, dz0 + 5, l.x1, 116, l.z1 - 9), M.steel);
-  b.add(boxGeoAt(l.x1, 100, l.z1 - 22, l.x1 + 3, 118, l.z1 - 18), M.brushed);
-  // guide e puleggia sopra la cabina, fino alla trave
-  for (const z of [l.z0 + 20, l.z1 - 20]) b.add(boxGeoAt(l.x1 - 30, l.h + 14, z - 2, l.x1 - 26, 314, z + 2), M.steel);
-  g.add(b.build('Ascensore'));
-
-  // pannelli: lamiera forata a nord e nel fisso est, vetro nella porta
-  const perfN = boxAt(M.perforated, l.x0 + t, 6, l.z0 + 1, l.x1 - t, l.h - 6, l.z0 + 2);
-  const perfE = boxAt(M.perforated, l.x1 - 2, 6, l.z0 + t, l.x1 - 1, l.h - 6, dz0);
-  const glass = boxAt(M.tinted, l.x1 - 2, 6, dz0 + 5, l.x1 - 1, l.h - 6, l.z1 - 9);
-  g.add(perfN, perfE, glass);
-
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(15 * CM, 3 * CM, 10, 32), M.steel);
-  wheel.position.set((l.x1 - 28) * CM, 300 * CM, ((l.z0 + l.z1) / 2) * CM);
-  wheel.rotation.y = Math.PI / 2;
-  g.add(wheel);
-  const hub = cylAt(M.steel, l.x1 - 28, 297, (l.z0 + l.z1) / 2, 4, 6, 12);
-  hub.rotation.z = Math.PI / 2;
-  g.add(hub);
-  const cable = new THREE.Mesh(rodGeo([l.x1 - 28, l.h + 14, (l.z0 + l.z1) / 2 + 15], [l.x1 - 28, 300, (l.z0 + l.z1) / 2 + 15], 0.4, 6), M.steel);
-  g.add(cable);
-
-  info(g, 'Ascensore', `Cabina ${l.x1 - l.x0} × ${l.z1 - l.z0} cm con porta vetrata, telaio in ferro e lamiera forata`);
+  info(g, 'Cancelletto curvo', 'Lamiera forata su ruote, appoggiato al parapetto');
   return g;
 }
 

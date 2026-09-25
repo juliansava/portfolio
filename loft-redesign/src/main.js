@@ -9,7 +9,8 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildScene } from './scene.js';
 import { S, roofY } from './survey.js';
-import { planCaps, sectionCaps, sectionCapsX, pocheMaterial } from './viewer/caps.js';
+import { planCaps, sectionCaps, sectionCapsX, pocheMaterial, pocheLightMaterial } from './viewer/caps.js';
+import { setPlaster } from './lib/materials.js';
 import { buildAnnotations } from './viewer/annotations.js';
 import { MeasureTool } from './viewer/measure.js';
 import { Walker } from './viewer/walk.js';
@@ -24,6 +25,7 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 const L = S.totalLength / 100;
 const D = S.depth / 100;
 const T = S.wallT / 100;
+const GL = S.ground.level / 100;
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -49,9 +51,10 @@ controls.dampingFactor = 0.12;
 
 const VIEWS = {
   // direzione di osservazione da sud-est, distanza calcolata per inquadrare tutto
-  axo: { kind: 'orbit', dir: [0.62, 0.52, 0.59], target: [5.3, 1.8, 2.4], fit: [14, 10.6], vfov: 36 },
-  planGround: { kind: 'plan', cut: 140 },
-  planMezz: { kind: 'plan', cut: 450 },
+  axo: { kind: 'orbit', dir: [0.62, 0.52, 0.59], box: [[-0.5, -4.2, -0.5], [11.45, 6.3, 5.5]], vfov: 36 },
+  planEntry: { kind: 'plan', cut: S.ground.level + 140, base: GL },
+  planGround: { kind: 'plan', cut: 140, base: 0 },
+  planMezz: { kind: 'plan', cut: 450, base: 3.3 },
   section: { kind: 'section', z: 256 },
   sectionX: { kind: 'section', x: 575 },
   // Pose ricavate confrontando i render con le foto (obiettivo grandangolare)
@@ -61,12 +64,18 @@ const VIEWS = {
   p4: { kind: 'photo', pos: [4.0, 1.2, 3.3], target: [0, 1.5, 0.8], hfov: 96 },
   m1: { kind: 'photo', pos: [0.7, 4.9, 0.6], target: [8, 3.6, 3.2], hfov: 108 },
   m2: { kind: 'photo', pos: [8.4, 4.9, 0.6], target: [1, 2.8, 4.2], hfov: 108 },
+  // foto 6 (ingresso, piano terra ipotizzato) e foto 7 (posa ricostruita)
+  p6: { kind: 'photo', pos: [0.55, GL + 1.55, 4.88], target: [1.45, GL + 1.95, 1.6], hfov: 100 },
+  p7: { kind: 'photo', pos: [6.9, 1.75, 2.86], target: [5.91, 1.58, 3.01], hfov: 95 },
 };
+// nomi usati nelle versioni precedenti
+const ALIASES = { plan0: 'planEntry', plan1: 'planGround', plan2: 'planMezz' };
 
 const state = {
   view: 'axo',
   kind: 'orbit',
   toggles: { roof: true, mezz: true, furn: true, labels: false, ao: !coarse },
+  scenario: params.get('scenario') === 'current' ? 'current' : 'project',
   light: 'day',
   tool: null, // 'measure' | 'walk'
   hfov: null,
@@ -146,6 +155,37 @@ function fitDistance(w, h, vfov) {
   return Math.max(h / 2 / t, w / 2 / (t * visibleAspect())) * 1.06;
 }
 
+// Distanza per inquadrare un parallelepipedo (m) visto lungo dir, tenendo
+// conto del pannello che copre la parte sinistra della vista.
+function fitBox(min, max, dir, vfov) {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const cam = new THREE.PerspectiveCamera(vfov, w / h, 0.05, 300);
+  const off = panelOffset();
+  if (off) cam.setViewOffset(w + 2 * off, h, 0, 0, w, h);
+  cam.updateProjectionMatrix();
+  const target = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
+  const corners = [];
+  for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) corners.push(new THREE.Vector3(x, y, z));
+  const left = -1 + (4 * off) / w + 0.05;
+  const p = new THREE.Vector3();
+  let lo = 1;
+  let hi = 120;
+  for (let i = 0; i < 30; i++) {
+    const d = (lo + hi) / 2;
+    cam.position.copy(target).addScaledVector(dir, d);
+    cam.lookAt(target);
+    cam.updateMatrixWorld();
+    const ok = corners.every((c) => {
+      p.copy(c).project(cam);
+      return p.x > left && p.x < 0.95 && Math.abs(p.y) < 0.92;
+    });
+    if (ok) hi = d;
+    else lo = d;
+  }
+  return { target, d: hi };
+}
+
 function setView(name, { animate = true } = {}) {
   const v = VIEWS[name];
   if (!v) return;
@@ -175,23 +215,24 @@ function setView(name, { animate = true } = {}) {
     fov = 30;
     const narrow = window.innerWidth <= 720;
     const d = fitDistance(L + (narrow ? 3.4 : 3.0), D + 2.3, fov);
-    target = new THREE.Vector3(L / 2, 0, D / 2);
-    pos = new THREE.Vector3(L / 2, d, D / 2 + 0.0001);
+    target = new THREE.Vector3(L / 2, v.base, D / 2);
+    pos = new THREE.Vector3(L / 2, v.base + d, D / 2 + 0.0001);
   } else if (v.kind === 'section' && v.x) {
     fov = 24;
-    const d = fitDistance(D + 3.8, 8.4, fov);
-    target = new THREE.Vector3(v.x / 100, 2.9, D / 2 + 0.5);
-    pos = new THREE.Vector3(v.x / 100 + d, 2.9, D / 2 + 0.5);
+    const d = fitDistance(D + 3.8, 11.8, fov);
+    target = new THREE.Vector3(v.x / 100, 1.1, D / 2 + 0.5);
+    pos = new THREE.Vector3(v.x / 100 + d, 1.1, D / 2 + 0.5);
   } else if (v.kind === 'section') {
     fov = 24;
-    const d = fitDistance(L + 6.2, 7.6, fov);
-    target = new THREE.Vector3(L / 2 - 1.4, 3.0, v.z / 100);
-    pos = new THREE.Vector3(L / 2 - 1.4, 3.0, v.z / 100 + d);
+    const d = fitDistance(L + 6.2, 11.2, fov);
+    target = new THREE.Vector3(L / 2 - 1.4, 1.1, v.z / 100);
+    pos = new THREE.Vector3(L / 2 - 1.4, 1.1, v.z / 100 + d);
   } else if (v.dir) {
     fov = v.vfov;
-    target = new THREE.Vector3(...v.target);
-    const d = fitDistance(v.fit[0], v.fit[1], fov);
-    pos = target.clone().add(new THREE.Vector3(...v.dir).normalize().multiplyScalar(d));
+    const dir = new THREE.Vector3(...v.dir).normalize();
+    const fit = fitBox(new THREE.Vector3(...v.box[0]), new THREE.Vector3(...v.box[1]), dir, fov);
+    target = fit.target;
+    pos = target.clone().add(dir.multiplyScalar(fit.d));
   } else {
     pos = new THREE.Vector3(...v.pos);
     target = new THREE.Vector3(...v.target);
@@ -271,15 +312,16 @@ function configureCut(v) {
     caps.traverse((o) => o.geometry?.dispose());
     caps = null;
   }
+  const sc = state.scenario;
   if (v.kind === 'plan') {
     renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), v.cut / 100)];
-    caps = planCaps(v.cut, W.poche);
+    caps = planCaps(v.cut, W.poche, W.pocheLight, sc);
   } else if (v.kind === 'section' && v.x) {
     renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), v.x / 100)];
-    caps = sectionCapsX(v.x, W.poche);
+    caps = sectionCapsX(v.x, W.poche, W.pocheLight, sc);
   } else if (v.kind === 'section') {
     renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, -1), v.z / 100)];
-    caps = sectionCaps(v.z, W.poche);
+    caps = sectionCaps(v.z, W.poche, W.pocheLight, sc);
   } else {
     renderer.clippingPlanes = [];
   }
@@ -314,13 +356,23 @@ function refreshVisibility() {
   W.roof.visible = roof;
   W.roofTop.visible = roof && !cameraInside();
   for (const c of W.layers.mezzanine.children) c.visible = toggles.mezz || c.userData.keep;
-  W.layers.furniture.visible = toggles.furn;
+  for (const o of W.scenarioObjs) o.visible = o.userData.scenario === state.scenario;
+  W.layers.currentFurniture.visible = toggles.furn;
+  W.layers.projectFurniture.visible = toggles.furn;
   for (const o of W.mezzFurniture) o.visible = toggles.mezz;
   // etichette
   const A = W.ann;
   const lab = toggles.labels;
-  A.rooms.visible = lab && state.view !== 'planMezz' && kind !== 'section';
-  A.upper.visible = lab && toggles.mezz && state.view !== 'planGround' && kind !== 'section';
+  const proj = state.scenario === 'project';
+  const v = state.view;
+  const main = lab && v !== 'planMezz' && v !== 'planEntry' && kind !== 'section';
+  A.rooms.visible = main && !proj;
+  A.roomsProject.visible = main && proj;
+  const up = lab && toggles.mezz && v !== 'planGround' && v !== 'planEntry' && kind !== 'section';
+  A.upper.visible = up && !proj;
+  A.upperProject.visible = up && proj;
+  A.ground.visible = lab && (v === 'planEntry' || (kind !== 'plan' && kind !== 'section'));
+  A.planEntry.visible = lab && v === 'planEntry';
   A.planGround.visible = lab && state.view === 'planGround';
   A.planMezz.visible = lab && state.view === 'planMezz';
   A.section.visible = lab && state.view === 'section';
@@ -341,8 +393,12 @@ function setLight(mode) {
   lights.sun.intensity = eve ? 0 : 2.3;
   lights.sun.castShadow = !eve;
   for (const a of lights.windows) a.intensity = eve ? 0.15 : a.userData.day;
-  // di giorno le lampade restano accese piano, come nelle foto
-  for (const b of lights.bulbs) b.intensity = b.userData.power * (eve ? 1 : 0.35);
+  // di giorno le lampade restano accese piano, come nelle foto; si accendono
+  // solo quelle dello scenario mostrato
+  for (const b of lights.bulbs) {
+    b.visible = !b.userData.scenario || b.userData.scenario === state.scenario;
+    b.intensity = b.userData.power * (eve ? 1 : 0.35);
+  }
   scene.environmentIntensity = eve ? 0.12 : 0.35;
   M.windowGlass.color.set(eve ? '#141a24' : '#eef3f6');
   M.windowGlass.emissive.set(eve ? '#1c2740' : '#e9f0f5');
@@ -470,7 +526,7 @@ function startWalk() {
   else $('#panel').dataset.collapsed = 'true';
   $('#walkpad').hidden = !coarse;
   $('#crosshair').hidden = coarse;
-  W.walker.setFurniture(state.toggles.furn);
+  configureWalker();
   W.walker.enter();
   applyProjection();
   refreshVisibility();
@@ -547,12 +603,38 @@ function updateHint() {
 // Comandi del pannello
 
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+$$('[data-scenario]').forEach((b) => b.addEventListener('click', () => setScenario(b.dataset.scenario)));
+
+// ---------------------------------------------------------------------------
+// Scenario: stato di fatto o progetto
+
+function setScenario(s) {
+  state.scenario = s;
+  $$('[data-scenario]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scenario === s)));
+  $('#eyebrow').textContent = s === 'project' ? 'Progetto · redesign degli interni' : 'Stato di fatto · rilievo 3D';
+  if (!W) return;
+  setPlaster(W.M, s);
+  configureWalker();
+  if (state.kind === 'plan' || state.kind === 'section') configureCut(VIEWS[state.view]);
+  setLight(state.light);
+  refreshVisibility();
+}
+
+// Gruppi i cui pezzi fanno ingombro nella passeggiata
+function configureWalker() {
+  if (!W) return;
+  const Lr = W.layers;
+  const cur = state.scenario === 'current';
+  const groups = [Lr.kitchen, cur ? Lr.currentFixtures : W.projectFixtures];
+  if (state.toggles.furn) groups.push(cur ? Lr.currentFurniture : Lr.projectFurniture);
+  W.walker.configure(state.scenario, groups);
+}
 $$('[data-light]').forEach((b) => b.addEventListener('click', () => setLight(b.dataset.light)));
 const bindToggle = (id, key) =>
   $(id).addEventListener('change', (e) => {
     state.toggles[key] = e.target.checked;
     if (key === 'labels') state.labelsAuto = false;
-    if (key === 'furn') W.walker.setFurniture(e.target.checked);
+    if (key === 'furn') configureWalker();
     refreshVisibility();
   });
 bindToggle('#t-roof', 'roof');
@@ -612,10 +694,13 @@ function build() {
   const world = buildScene(renderer);
   const sided = { north: [], south: [], west: [], east: [] };
   const mezzFurniture = [];
+  const scenarioObjs = [];
   world.model.traverse((o) => {
     if (o.userData.side && sided[o.userData.side]) sided[o.userData.side].push(o);
     if (o.userData.level === 'mezz') mezzFurniture.push(o);
+    if (o.userData.scenario) scenarioObjs.push(o);
   });
+  const projectFixtures = world.layers.project.getObjectByName('sanitari');
   const roof = world.layers.shell.getObjectByName('tetto');
   let roofTop = null;
   roof.traverse((o) => {
@@ -630,12 +715,27 @@ function build() {
     onMove: requestRender,
   });
   walker.lock.addEventListener('change', requestRender);
-  W = { ...world, sided, mezzFurniture, roof, roofTop, ann, measure, walker, poche: pocheMaterial() };
+  W = {
+    ...world,
+    sided,
+    mezzFurniture,
+    scenarioObjs,
+    projectFixtures,
+    roof,
+    roofTop,
+    ann,
+    measure,
+    walker,
+    poche: pocheMaterial(),
+    pocheLight: pocheLightMaterial(),
+  };
   setupComposer();
 
   resize();
+  setScenario(state.scenario);
   setLight('day');
-  const start = VIEWS[params.get('view')] ? params.get('view') : 'axo';
+  const asked = ALIASES[params.get('view')] || params.get('view');
+  const start = VIEWS[asked] ? asked : 'axo';
   setView(start, { animate: false });
   $('#loading').hidden = true;
 
@@ -648,6 +748,7 @@ function build() {
     state,
     setView,
     setLight,
+    setScenario,
     look(pos, target, fov = 60) {
       tween = null;
       state.hfov = null;

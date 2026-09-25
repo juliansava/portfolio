@@ -5,11 +5,12 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { createMaterials, setAnisotropy } from './lib/materials.js';
 import { buildShell } from './model/shell.js';
-import { buildMezzanine, buildStairEnclosure } from './model/structure.js';
-import { buildStair } from './model/stair.js';
+import { buildMezzanine, buildStairEnclosure, buildRailings } from './model/structure.js';
+import { buildStair, buildGroundStair } from './model/stair.js';
 import { buildKitchen } from './model/kitchen.js';
 import { buildBathroom } from './model/bathroom.js';
 import { buildFurniture } from './model/furniture.js';
+import { buildProject } from './model/project.js';
 import { S } from './survey.js';
 import { CM } from './lib/geo.js';
 
@@ -29,16 +30,36 @@ export function buildScene(renderer) {
   scene.add(model);
 
   const lamps = [];
+  const stairs = new THREE.Group();
+  stairs.name = 'scale';
+  stairs.add(buildStair(M), buildGroundStair(M));
+
+  // Stato di fatto: parapetti attuali, bagno e arredi fotografati
+  const current = new THREE.Group();
+  current.name = 'stato di fatto';
+  current.userData.scenario = 'current';
+  const n0 = lamps.length;
+  const currentFurniture = buildFurniture(M, lamps);
+  for (const l of lamps.slice(n0)) l.scenario = 'current';
+  const currentFixtures = buildBathroom(M);
+  current.add(buildRailings(M, 'current'), currentFixtures, currentFurniture);
+
+  // Progetto: opere leggere e arredi del redesign
+  const project = buildProject(M, lamps);
+
   const layers = {
     shell: buildShell(M),
     mezzanine: buildMezzanine(M),
-    stair: buildStair(M),
+    stair: stairs,
     enclosure: buildStairEnclosure(M),
     kitchen: buildKitchen(M, lamps),
-    bathroom: buildBathroom(M),
-    furniture: buildFurniture(M, lamps),
+    current,
+    project: project.root,
   };
-  for (const g of Object.values(layers)) model.add(g);
+  layers.currentFurniture = currentFurniture;
+  layers.currentFixtures = currentFixtures;
+  layers.projectFurniture = project.furniture;
+  for (const [k, g] of Object.entries(layers)) if (!/Furniture|Fixtures/.test(k)) model.add(g);
 
   const lights = addLights(scene, lamps);
 
@@ -93,6 +114,7 @@ function addLights(scene, lamps) {
     const p = new THREE.PointLight(l.color, 0, l.dist, 2);
     p.position.set(l.x * CM, l.y * CM, l.z * CM);
     p.userData.power = l.power;
+    p.userData.scenario = l.scenario || null;
     scene.add(p);
     return p;
   });

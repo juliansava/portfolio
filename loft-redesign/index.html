@@ -576,17 +576,26 @@
       <div class="crosshair" id="crosshair" hidden></div>
 
       <header class="titleblock">
-        <div class="eyebrow">Stato di fatto · rilievo 3D</div>
+        <div class="eyebrow" id="eyebrow">Progetto · redesign degli interni</div>
         <h1>Loft con soppalco</h1>
-        <p class="meta">Open space 8,70 × 5,00 m · soppalco +3,30 m<span class="extra"><br />Falda in abete da 4,30 a 6,19 m</span></p>
+        <p class="meta">Open space 8,70 × 5,00 m · soppalco +3,30 m<span class="extra"><br />Ingresso al piano terra · interpiano 3,80 m</span></p>
       </header>
 
       <nav class="panel" id="panel" aria-label="Comandi del modello">
         <section class="group">
+          <h2>Scenario</h2>
+          <div class="grid2" role="group" aria-label="Scenario">
+            <button class="chip" data-scenario="current" aria-pressed="false">Stato di fatto</button>
+            <button class="chip" data-scenario="project" aria-pressed="true">Progetto</button>
+          </div>
+        </section>
+
+        <section class="group">
           <h2>Viste</h2>
           <div class="grid2">
-            <button class="chip span2" data-view="axo" aria-pressed="true">Assonometria</button>
-            <button class="chip" data-view="planGround">Pianta piano</button>
+            <button class="chip" data-view="axo" aria-pressed="true">Assonometria</button>
+            <button class="chip" data-view="planEntry">Pianta piano terra</button>
+            <button class="chip" data-view="planGround">Pianta open space</button>
             <button class="chip" data-view="planMezz">Pianta soppalco</button>
             <button class="chip" data-view="section">Sezione lunga</button>
             <button class="chip" data-view="sectionX">Sezione corta</button>
@@ -601,7 +610,9 @@
             <button class="chip photo-chip" data-view="p3"><span class="top"><span class="n">3</span>Verso la scala</span></button>
             <button class="chip photo-chip" data-view="p4"><span class="top"><span class="n">4</span>Tavolo e scala</span></button>
             <button class="chip photo-chip" data-view="m1"><span class="top"><span class="n">5</span>Soppalco, verso la cucina</span></button>
-            <button class="chip photo-chip" data-view="m2"><span class="top"><span class="n">6</span>Soppalco, verso l'ascensore</span></button>
+            <button class="chip photo-chip" data-view="m2"><span class="top"><span class="n">6</span>Soppalco, verso la scala</span></button>
+            <button class="chip photo-chip" data-view="p6"><span class="top"><span class="n">7</span>Ingresso, piano terra</span></button>
+            <button class="chip photo-chip" data-view="p7"><span class="top"><span class="n">8</span>Arrivo dalla gabbia</span></button>
           </div>
         </section>
 
@@ -610,7 +621,7 @@
           <div class="toggles">
             <label class="switch"><input type="checkbox" id="t-roof" checked /><span></span>Tetto</label>
             <label class="switch"><input type="checkbox" id="t-mezz" checked /><span></span>Soppalco</label>
-            <label class="switch"><input type="checkbox" id="t-furn" checked /><span></span>Arredi attuali</label>
+            <label class="switch"><input type="checkbox" id="t-furn" checked /><span></span>Arredi</label>
             <label class="switch"><input type="checkbox" id="t-labels" /><span></span>Nomi e quote</label>
           </div>
         </section>
@@ -648,10 +659,16 @@
             <dd>130 + 85 cm</dd>
             <dt>Sotto falda (dal soppalco)</dt>
             <dd>250 · 283 · 207 · 100</dd>
-            <dt>Alzate scala</dt>
+            <dt>Alzate scala soppalco</dt>
             <dd>18 × 18,3 cm</dd>
+            <dt>Interpiano piano terra</dt>
+            <dd>380 cm (ipotesi)</dd>
+            <dt>Scala piano terra</dt>
+            <dd>21 × 18,1 cm (ipotesi)</dd>
+            <dt>Ampliamento in vetro</dt>
+            <dd>148 × 97 cm (progetto)</dd>
           </dl>
-          <p>Stime da verificare in sopralluogo: finestre (110 × 275 cm, davanzale 90), spessore del soppalco (23 cm), accesso alla scala dal cancelletto, parapetto in mattoni prolungato sotto i gradini a ventaglio, arredo del bagno.</p>
+          <p>Il piano terra è un'ipotesi ricavata dalla foto 6: posizione del portoncino, della caldaia e della prima rampa vanno confermate con la pianta. Stime da verificare: finestre (110 × 275 cm, davanzale 90), spessore del soppalco (23 cm), gradini neri 125 × 102 cm.</p>
           <p>I canali neri dell'aria visibili nella foto 1 non compaiono nelle altre foto e non sono nel modello.</p>
         </details>
       </nav>

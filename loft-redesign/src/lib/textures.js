@@ -651,3 +651,346 @@ export function dottedFabric({ base = '#b8452e', dot = '#e9c9a5' } = {}) {
   }
   return finish({ w, h, rgba, size: [0.1, 0.1] });
 }
+
+// ---------------------------------------------------------------------------
+// Redesign: nuove finiture
+
+// Lamiera mandorlata (scala del piano terra): rilievi a losanga alternati.
+export function diamondPlate({ seed = 71 } = {}) {
+  const w = 256;
+  const h = 256;
+  const size = [0.1, 0.1];
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const wear = fbm(seed, 4, 4);
+  const cell = w / 4;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const cx = Math.floor(x / cell);
+      const cy = Math.floor(y / cell);
+      const lx = (x % cell) / cell - 0.5;
+      const ly = (y % cell) / cell - 0.5;
+      // losanga allungata, ruotata di ±45° a scacchiera
+      const s = (cx + cy) % 2 === 0 ? 1 : -1;
+      const a = (lx + s * ly) / Math.SQRT2;
+      const b = (lx - s * ly) / Math.SQRT2;
+      const d = Math.pow(Math.abs(a) / 0.36, 2) + Math.pow(Math.abs(b) / 0.085, 2);
+      const bump = d < 1 ? Math.sqrt(1 - d) : 0;
+      const n = wear(x / w, y / h);
+      // i rilievi consumati sono più chiari
+      const g = 44 + bump * 38 + (n - 0.5) * 22;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(g);
+      rgba[i + 1] = clamp(g + 1);
+      rgba[i + 2] = clamp(g + 3);
+      rgba[i + 3] = 255;
+      height[y * w + x] = bump;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 3, size });
+}
+
+// Tappeto annodato a mano dai colori spenti: fondo, bordure e motivo centrale.
+// Si applica a un piano con UV 0..1 (vedi rugGeo nei mobili).
+export function rug({ seed = 81, field = '#b9a58a', border = '#7c4b35', accent = '#3e4a5a', light = '#d9ccb4', motif = 'medallion' } = {}) {
+  const w = 512;
+  const h = 512;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const wool = fbm(seed, 96, 2);
+  const abrash = fbm(seed + 5, 3, 3);
+  const F = hexToRgb(field);
+  const B = hexToRgb(border);
+  const A = hexToRgb(accent);
+  const Lc = hexToRgb(light);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const v = y / h;
+      const e = Math.min(u, 1 - u, v, 1 - v);
+      let c;
+      if (e < 0.018) c = Lc;
+      else if (e < 0.075) {
+        // bordura a rombi
+        const t = ((u + v) * 40) % 1;
+        c = Math.abs(t - 0.5) < 0.18 ? A : B;
+      } else if (e < 0.09) c = Lc;
+      else {
+        c = F;
+        const du = u - 0.5;
+        const dv = v - 0.5;
+        if (motif === 'medallion') {
+          const r = Math.abs(du) * 1.4 + Math.abs(dv);
+          if (r < 0.2) c = r < 0.12 ? A : B;
+          else if (Math.abs(r - 0.3) < 0.012) c = B;
+          // ornati sparsi nel campo
+          const g = Math.sin(u * 44) * Math.sin(v * 44);
+          if (g > 0.93) c = mix(F, B, 0.7);
+        } else if (motif === 'stripes') {
+          const t = (v * 18) % 1;
+          if (t < 0.12) c = B;
+          else if (t > 0.5 && t < 0.56) c = A;
+        } else if (motif === 'grid') {
+          const t1 = (u * 9) % 1;
+          const t2 = (v * 9) % 1;
+          if (t1 < 0.05 || t2 < 0.05) c = mix(F, B, 0.55);
+        }
+      }
+      const n = wool(u, v);
+      const ab = abrash(u, v);
+      const k = 0.9 + (n - 0.5) * 0.16 + (ab - 0.5) * 0.14;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(c[0] * k);
+      rgba[i + 1] = clamp(c[1] * k);
+      rgba[i + 2] = clamp(c[2] * k);
+      rgba[i + 3] = 255;
+      height[y * w + x] = n;
+    }
+  }
+  const t = finish({ w, h, rgba, height, normalStrength: 1.5, size: [1, 1] });
+  return t;
+}
+
+// Cuoio: grana fine e velature (divano, sedie, poltrone).
+export function leather({ seed = 91, base = '#8a4e2b', size = 0.5 } = {}) {
+  const w = 256;
+  const h = 256;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const grain = fbm(seed, 48, 3, 0.6);
+  const patina = fbm(seed + 2, 3, 4);
+  const B = hexToRgb(base);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const v = y / h;
+      const g = grain(u, v);
+      const p = patina(u, v);
+      const cell = Math.abs(g - 0.5) < 0.035 ? -0.1 : 0;
+      const k = 0.92 + (p - 0.5) * 0.3 + cell + (g - 0.5) * 0.08;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(B[0] * k + (p - 0.5) * 18);
+      rgba[i + 1] = clamp(B[1] * k);
+      rgba[i + 2] = clamp(B[2] * k);
+      rgba[i + 3] = 255;
+      height[y * w + x] = g + cell;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 1.2, size: [size, size] });
+}
+
+// Bouclé: riccioli di lana a rilievo.
+export function boucle({ seed = 101, base = '#e6ddcc' } = {}) {
+  const w = 256;
+  const h = 256;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const loops = fbm(seed, 32, 3, 0.7);
+  const B = hexToRgb(base);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const n = loops(x / w, y / h);
+      const curl = Math.pow(Math.abs(Math.sin(n * 18)), 3);
+      const k = 0.84 + curl * 0.2 + (n - 0.5) * 0.1;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(B[0] * k);
+      rgba[i + 1] = clamp(B[1] * k);
+      rgba[i + 2] = clamp(B[2] * k);
+      rgba[i + 3] = 255;
+      height[y * w + x] = curl;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 3, size: [0.12, 0.12] });
+}
+
+// Lino: trama e ordito leggermente irregolari (tende, biancheria, divani).
+export function linen({ seed = 111, base = '#d8cfbf', size = 0.2 } = {}) {
+  const w = 256;
+  const h = 256;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const slub = fbmRect(seed, 4, 16, 3);
+  const cloud = fbm(seed + 1, 2, 3);
+  const B = hexToRgb(base);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const v = y / h;
+      const warp = Math.sin((x / 2) * Math.PI) * 0.5 + 0.5;
+      const weft = Math.sin((y / 2) * Math.PI + slub(u, v) * 3) * 0.5 + 0.5;
+      const t = (warp + weft) / 2;
+      const k = 0.9 + (t - 0.5) * 0.12 + (slub(u, v) - 0.5) * 0.14 + (cloud(u, v) - 0.5) * 0.06;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(B[0] * k);
+      rgba[i + 1] = clamp(B[1] * k);
+      rgba[i + 2] = clamp(B[2] * k);
+      rgba[i + 3] = 255;
+      height[y * w + x] = t;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 0.8, size: [size, size] });
+}
+
+// Piastrelle fatte a mano (tipo zellige), posa a correre, fughe sottili.
+export function handTiles({ seed = 121, base = '#e9e4da', size = [0.3, 0.15], cols = 4, rows = 4, glaze = 0.14 } = {}) {
+  const w = 512;
+  const h = 512;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const rough = new Uint8ClampedArray(w * h * 4);
+  const wave = fbm(seed, 12, 3);
+  const B = hexToRgb(base);
+  const tw = w / cols;
+  const th = h / rows;
+  for (let y = 0; y < h; y++) {
+    const row = Math.floor(y / th);
+    const ly = y - row * th;
+    const off = (row % 2) * tw * 0.5;
+    for (let x = 0; x < w; x++) {
+      const xx = (x + off) % w;
+      const col = Math.floor(xx / tw);
+      const lx = xx - col * tw;
+      const edge = Math.min(lx, tw - lx, ly, th - ly);
+      const i = (y * w + x) * 4;
+      const n = wave(x / w, y / h);
+      let c;
+      let hh;
+      if (edge < 3) {
+        c = [206, 200, 190];
+        hh = 0;
+      } else {
+        const r = hash2(col, row, seed);
+        const k = 1 - glaze + r * glaze * 1.4 + (n - 0.5) * glaze;
+        c = [B[0] * k, B[1] * k, B[2] * k];
+        hh = 0.6 + (n - 0.5) * 0.5 + Math.min(1, (edge - 3) / 6) * 0.3;
+      }
+      rgba[i] = clamp(c[0]);
+      rgba[i + 1] = clamp(c[1]);
+      rgba[i + 2] = clamp(c[2]);
+      rgba[i + 3] = 255;
+      height[y * w + x] = hh;
+      const rv = edge < 3 ? 235 : 40 + n * 50;
+      rough[i] = rough[i + 1] = rough[i + 2] = rv;
+      rough[i + 3] = 255;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 2.2, size, rough });
+}
+
+// Vetro cannettato: solo normal map a righe verticali.
+export function reeded({ pitch = 0.012 } = {}) {
+  const w = 64;
+  const h = 8;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const t = ((x / w) * 4) % 1;
+      height[y * w + x] = Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+      const i = (y * w + x) * 4;
+      rgba[i] = rgba[i + 1] = rgba[i + 2] = 255;
+      rgba[i + 3] = 255;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 5, size: [pitch * 4, pitch * 4] });
+}
+
+// Travertino: bande orizzontali e piccole cavità.
+export function travertine({ seed = 131, base = '#d8c7ab' } = {}) {
+  const w = 512;
+  const h = 512;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const height = new Float32Array(w * h);
+  const band = fbm(seed, 2, 3);
+  const fine = fbm(seed + 1, 48, 2);
+  const pits = fbm(seed + 2, 24, 2);
+  const B = hexToRgb(base);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const v = y / h;
+      const b = Math.sin((v * 9 + band(u, v) * 2.5) * Math.PI);
+      const p = pits(u, v) > 0.72 ? 1 : 0;
+      const k = 0.94 + b * 0.05 + (fine(u, v) - 0.5) * 0.08 - p * 0.18;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(B[0] * k);
+      rgba[i + 1] = clamp(B[1] * k);
+      rgba[i + 2] = clamp(B[2] * k - b * 3);
+      rgba[i + 3] = 255;
+      height[y * w + x] = 1 - p * 0.8;
+    }
+  }
+  return finish({ w, h, rgba, height, normalStrength: 1.5, size: [0.9, 0.9] });
+}
+
+// Dorsi di libri su un ripiano (una fila per altezza di texture).
+export function bookSpines({ seed = 141 } = {}) {
+  const w = 512;
+  const h = 128;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const palette = ['#2f3b46', '#7a3b2b', '#c9b99a', '#1f2a24', '#8c6a3f', '#e3dccd', '#4d5a4a', '#9a4d3a', '#2a2a2c', '#b8a07a', '#5b4033'].map(hexToRgb);
+  const r = mulberry32(seed);
+  let x = 0;
+  const spines = [];
+  while (x < w) {
+    const bw = 5 + Math.floor(r() * 12);
+    const top = Math.floor(r() * 34);
+    spines.push({ x0: x, x1: Math.min(w, x + bw), top, c: palette[Math.floor(r() * palette.length)], band: r() > 0.5 });
+    x += bw + (r() > 0.85 ? 2 : 0);
+  }
+  for (let y = 0; y < h; y++) {
+    for (let xx = 0; xx < w; xx++) {
+      const i = (y * w + xx) * 4;
+      const s = spines.find((sp) => xx >= sp.x0 && xx < sp.x1);
+      let c = [26, 22, 20]; // fondo in ombra
+      if (s && y >= s.top) {
+        const edge = xx === s.x0 || xx === s.x1 - 1;
+        const k = edge ? 0.7 : 1;
+        c = [s.c[0] * k, s.c[1] * k, s.c[2] * k];
+        if (s.band && (y - s.top) % 40 > 8 && (y - s.top) % 40 < 12) c = mix(c, [210, 190, 140], 0.7);
+      }
+      rgba[i] = clamp(c[0]);
+      rgba[i + 1] = clamp(c[1]);
+      rgba[i + 2] = clamp(c[2]);
+      rgba[i + 3] = 255;
+    }
+  }
+  return finish({ w, h, rgba, size: [0.9, 0.3] });
+}
+
+// Quadro astratto a campiture (UV 0..1 sul piano della tela).
+export function painting({ seed = 151, colors = ['#c9b79c', '#8f3f2a', '#2d3440', '#e8dfcf'], kind = 'fields' } = {}) {
+  const w = 256;
+  const h = 256;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  const brush = fbm(seed, 8, 4);
+  const cols = colors.map(hexToRgb);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const v = y / h;
+      const n = brush(u, v);
+      let c;
+      if (kind === 'fields') {
+        const t = v + (n - 0.5) * 0.06;
+        c = t < 0.08 || t > 0.94 ? cols[3] : t < 0.52 ? cols[0] : t < 0.58 ? cols[3] : cols[1];
+        if (t > 0.6 && t < 0.9 && Math.abs(u - 0.5) > 0.4) c = cols[3];
+      } else if (kind === 'arcs') {
+        const d = Math.hypot(u - 0.3, v - 1.05);
+        c = d < 0.45 ? cols[1] : d < 0.62 ? cols[0] : cols[3];
+        if (Math.hypot(u - 0.78, v - 0.28) < 0.12) c = cols[2];
+      } else {
+        // segni a pennello su fondo chiaro
+        const s = Math.sin(u * 7 + n * 6) * Math.cos(v * 5 - n * 4);
+        c = s > 0.55 ? cols[2] : s < -0.7 ? cols[1] : cols[3];
+      }
+      const k = 0.94 + (n - 0.5) * 0.12;
+      const i = (y * w + x) * 4;
+      rgba[i] = clamp(c[0] * k);
+      rgba[i + 1] = clamp(c[1] * k);
+      rgba[i + 2] = clamp(c[2] * k);
+      rgba[i + 3] = 255;
+    }
+  }
+  return finish({ w, h, rgba, size: [1, 1] });
+}

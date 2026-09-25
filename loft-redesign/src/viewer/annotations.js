@@ -50,24 +50,57 @@ function dimLine(a, b, text, color = '#9c4b30') {
 export function buildAnnotations() {
   const L = S.totalLength;
   const D = S.depth;
+  const G = S.ground.level;
+  const lab = (group, text, sub, x, y, z) => group.add(at(tag(text, sub), x, y, z));
 
-  // Nomi degli ambienti (piano principale)
+  // Nomi degli ambienti, piano principale: stato di fatto
   const rooms = new THREE.Group();
   rooms.name = 'nomi';
-  rooms.add(at(tag('Open space', 'h 3,07 · doppia altezza verso le finestre'), 520, 20, 340));
-  rooms.add(at(tag('Cucina'), 770, 20, 390));
-  rooms.add(at(tag('Bagno', `${S.rightWidth} × 390 cm`), 985, 20, 330));
-  rooms.add(at(tag('Ripostiglio'), 985, 20, 52));
-  rooms.add(at(tag('Scala', '18 alzate'), 42, 20, 300));
-  rooms.add(at(tag('Ascensore'), 48, 20, 445));
+  lab(rooms, 'Open space', 'h 3,07 · doppia altezza verso le finestre', 520, 20, 340);
+  lab(rooms, 'Cucina', null, 770, 20, 390);
+  lab(rooms, 'Bagno', `${S.rightWidth} × 390 cm`, 985, 20, 330);
+  lab(rooms, 'Ripostiglio', null, 985, 20, 52);
+  lab(rooms, 'Scala', '18 alzate', 150, 20, 172);
+  lab(rooms, 'Arrivo scala', 'dal piano terra', 48, 20, 445);
 
-  // Nomi al livello del soppalco
+  // Piano principale: progetto
+  const roomsProject = new THREE.Group();
+  roomsProject.name = 'nomi progetto';
+  lab(roomsProject, 'Soggiorno', 'divano, poltrone, musica', 555, 20, 118);
+  lab(roomsProject, 'Pranzo', 'tavolo tondo Ø 140, sei posti', 547, 20, 395);
+  lab(roomsProject, 'Bar', null, 420, 20, 440);
+  lab(roomsProject, 'Cucina', 'invariata', 770, 20, 390);
+  lab(roomsProject, 'Lavanderia', null, 985, 20, 52);
+  lab(roomsProject, 'Antibagno', null, 940, 20, 150);
+  lab(roomsProject, 'Doccia', 'in nicchia', 1050, 20, 150);
+  lab(roomsProject, 'Bagno', 'wc, bidet, lavabo doppio', 985, 20, 330);
+  lab(roomsProject, 'Arrivo scala', 'dal piano terra', 48, 20, 445);
+
+  // Soppalco: stato di fatto
   const upper = new THREE.Group();
   upper.name = 'nomi soppalco';
-  upper.add(at(tag('Soppalco', 'h 2,83 → 2,07 sotto falda'), 600, S.mezzTop + 20, 100));
-  upper.add(at(tag('Corridoio', `${S.corridorW} cm`), 170, S.mezzTop + 20, 62));
-  upper.add(at(tag('Ala est', 'h 2,83 → 1,00'), 985, S.mezzTop + 20, 300));
-  upper.add(at(tag('Vuoto a doppia altezza'), 520, S.mezzTop + 20, 360));
+  lab(upper, 'Soppalco', 'h 2,83 → 2,07 sotto falda', 600, S.mezzTop + 20, 100);
+  lab(upper, 'Corridoio', `${S.corridorW} cm`, 170, S.mezzTop + 20, 62);
+  lab(upper, 'Ala est', 'h 2,83 → 1,00', 985, S.mezzTop + 20, 300);
+  lab(upper, 'Vuoto a doppia altezza', null, 520, S.mezzTop + 20, 360);
+
+  // Soppalco: progetto
+  const upperProject = new THREE.Group();
+  upperProject.name = 'nomi soppalco progetto';
+  lab(upperProject, 'Lettura', 'libreria a tutta parete', 165, S.mezzTop + 20, 95);
+  lab(upperProject, 'Guardaroba', 'armadio tra le lesene', 535, S.mezzTop + 20, 110);
+  lab(upperProject, 'Zona notte', 'letto king size', 910, S.mezzTop + 20, 130);
+  lab(upperProject, 'Ampliamento in vetro', `${S.glassExt.x1 - S.glassExt.x0} × ${S.glassExt.z1 - S.glassExt.z0} cm`, 796, S.mezzTop + 20, 262);
+  lab(upperProject, 'Armadio sotto falda', null, 986, S.mezzTop + 20, 360);
+  lab(upperProject, 'Vuoto a doppia altezza', null, 500, S.mezzTop + 20, 360);
+
+  // Piano terra
+  const ground = new THREE.Group();
+  ground.name = 'nomi piano terra';
+  lab(ground, 'Ingresso', 'ipotesi: manca la pianta', 250, G + 20, 400);
+  lab(ground, 'Scala a U', `${S.groundStair.risers} alzate`, 150, G + 20, 300);
+  lab(ground, 'Caldaia', null, 285, G + 20, 90);
+  lab(ground, 'Altre unità', 'non rilevate', 720, G + 20, 250);
 
   // Quote della pianta del piano principale
   const planGround = new THREE.Group();
@@ -91,12 +124,25 @@ export function buildAnnotations() {
   planMezz.add(dimLine([-95, ym, S.corridorW], [-95, ym, S.mezzEdgeZ], `${S.mezzEdgeZ - S.corridorW}`));
   planMezz.add(dimLine([L + 95, ym, 0], [L + 95, ym, D], `${D} cm`));
 
+  // Quote della pianta del piano terra
+  const planEntry = new THREE.Group();
+  planEntry.name = 'quote piano terra';
+  const ye = G + 125;
+  const hall = S.ground.hall;
+  planEntry.add(dimLine([hall.x0, ye, -95], [hall.x1, ye, -95], `${hall.x1 - hall.x0} cm`));
+  planEntry.add(dimLine([-95, ye, 0], [-95, ye, D], `${D} cm`));
+  const f1 = S.groundStair.first;
+  planEntry.add(dimLine([f1.x0, ye, D + 95], [f1.x1, ye, D + 95], `${f1.x1 - f1.x0}`));
+  planEntry.add(dimLine([S.ground.door.x0, ye, D + 95], [S.ground.door.x1, ye, D + 95], `porta ${S.ground.door.x1 - S.ground.door.x0}`));
+
   // Quote altimetriche della sezione (lato ovest)
   const section = new THREE.Group();
   section.name = 'quote sezione';
   const zs = 250; // appena dietro il piano di sezione (256)
   const xs = -120;
   const lev = [
+    [G, `${fmtM(G).replace('-', '−')} piano terra`],
+    [-S.ground.slab - 6, `−${fmtM(S.ground.slab)} intradosso`],
     [0, '±0,00'],
     [S.mezzUnder - 6, `+${fmtM(S.mezzUnder)} intradosso`],
     [S.mezzTop + 6, `+${fmtM(S.mezzTop)} soppalco`],
@@ -109,6 +155,7 @@ export function buildAnnotations() {
     section.add(l);
     section.add(dimLine([xs + 10, y, zs], [-50, y, zs], ''));
   }
+  section.add(dimLine([L + 80, G, zs], [L + 80, 0, zs], `${-G}`));
   section.add(dimLine([L + 80, 0, zs], [L + 80, S.mezzUnder, zs], `${S.mezzUnder}`));
   section.add(dimLine([L + 80, S.mezzUnder, zs], [L + 80, S.mezzTop, zs], `${S.mezzTop - S.mezzUnder}`));
   section.add(dimLine([L + 80, S.mezzTop, zs], [L + 80, roofY(zs), zs], `${fmt(roofY(zs) - S.mezzTop)}`));
@@ -121,6 +168,7 @@ export function buildAnnotations() {
   sectionX.name = 'quote sezione trasversale';
   const xq = 560;
   const lvx = [
+    [G, `${fmtM(G).replace('-', '−')} piano terra`],
     [0, '±0,00'],
     [S.mezzUnder, `+${fmtM(S.mezzUnder)}`],
     [S.mezzTop, `+${fmtM(S.mezzTop)} soppalco`],
@@ -142,5 +190,5 @@ export function buildAnnotations() {
   sectionX.add(dimLine([xq, 0, D + 70], [xq, w2.sill, D + 70], `${w2.sill}`));
   sectionX.add(dimLine([xq, S.mezzTop, -80], [xq, roofY(0), -80], `${Math.round(roofY(0) - S.mezzTop)}`));
 
-  return { rooms, upper, planGround, planMezz, section, sectionX };
+  return { rooms, roomsProject, upper, upperProject, ground, planGround, planMezz, planEntry, section, sectionX };
 }

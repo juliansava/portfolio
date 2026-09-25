@@ -2,6 +2,6 @@
 
 ## Progetti
 
-- [**Loft con soppalco**](loft-redesign/): rilievo 3D interattivo dello stato di
-  fatto di un loft in mattoni, base per il redesign degli interni.
-  Three.js + Vite, un unico file HTML in uscita.
+- [**Loft con soppalco**](loft-redesign/): modello 3D interattivo di un loft in
+  mattoni su tre livelli, con lo stato di fatto e il progetto di redesign degli
+  interni a confronto. Three.js + Vite, un unico file HTML in uscita.

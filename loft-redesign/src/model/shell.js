@@ -1,12 +1,31 @@
-// Involucro: murature, pavimenti, falda del tetto, finestre, tramezzi.
+// Involucro: murature, solai, falda del tetto, finestre, tramezzi e
+// atrio d'ingresso al piano terra.
 
 import * as THREE from 'three';
 import { S, roofY } from '../survey.js';
-import { CM, boxAt, boxGeoAt, wallGeo, archOutline, Batch, info, rodGeo } from '../lib/geo.js';
+import { CM, boxAt, boxGeoAt, cylGeoAt, prismGeo, wallGeo, archOutline, Batch, info, rodGeo } from '../lib/geo.js';
 
 const L = S.totalLength; // 1097
 const D = S.depth; // 500
 const T = S.wallT;
+const G = S.ground.level; // -380
+const BASE = G - 20; // piede dei muri
+const HALL = S.ground.hall;
+const DOOR = S.ground.door;
+// Finestra dell'atrio sotto W1 (ipotesi)
+export const GROUND_WINDOW = { id: 'W0', x0: 170, x1: 280, sill: G + 95, crown: G + 300 };
+// Contorno del solaio del piano principale: tacca del vano scala sul muro ovest
+const SW = S.stairwell;
+export const SLAB_OUTLINE = [
+  [0, 0],
+  [L, 0],
+  [L, D],
+  [0, D],
+  [0, SW.z1],
+  [SW.x1, SW.z1],
+  [SW.x1, SW.z0],
+  [0, SW.z0],
+];
 
 export function buildShell(M) {
   const shell = new THREE.Group();
@@ -33,8 +52,8 @@ export function buildShell(M) {
       end: [-T, 0],
       t: T,
       profile: [
-        [0, -20],
-        [L + 2 * T, -20],
+        [0, BASE],
+        [L + 2 * T, BASE],
         [L + 2 * T, topN],
         [0, topN],
       ],
@@ -47,15 +66,21 @@ export function buildShell(M) {
 
   // --- Muro sud (mattoni a vista, finestre ad arco) -------------------------
   const topS = roofY(D + T) + 24;
-  const holes = S.windows.map((w) => archOutline(w.x0 + T, w.x1 + T, w.sill, w.crown, 28));
+  const holes = [...S.windows, GROUND_WINDOW].map((w) => archOutline(w.x0 + T, w.x1 + T, w.sill, w.crown, 28));
+  holes.push([
+    [DOOR.x0 + T, G],
+    [DOOR.x1 + T, G],
+    [DOOR.x1 + T, G + DOOR.h],
+    [DOOR.x0 + T, G + DOOR.h],
+  ]);
   const south = new THREE.Mesh(
     wallGeo({
       start: [-T, D],
       end: [L + T, D],
       t: T,
       profile: [
-        [0, -20],
-        [L + 2 * T, -20],
+        [0, BASE],
+        [L + 2 * T, BASE],
         [L + 2 * T, topS],
         [0, topS],
       ],
@@ -64,7 +89,7 @@ export function buildShell(M) {
     [M.brickOld, M.plaster],
   );
   south.userData.side = 'south';
-  info(south, 'Muro sud', 'Mattoni pieni a vista, imposta della falda a 4,30 m');
+  info(south, 'Muro sud', 'Mattoni pieni a vista, imposta della falda a 4,30 m; al piano terra portoncino d\'ingresso');
   sides.south.add(south);
 
   // --- Muri di testata (seguono la falda) -----------------------------------
@@ -75,8 +100,8 @@ export function buildShell(M) {
       end: [0, D + T],
       t: T,
       profile: [
-        [0, -20],
-        [D + 2 * T, -20],
+        [0, BASE],
+        [D + 2 * T, BASE],
         [D + 2 * T, gable(D + T)],
         [0, gable(-T)],
       ],
@@ -93,8 +118,8 @@ export function buildShell(M) {
       end: [L, -T],
       t: T,
       profile: [
-        [0, -20],
-        [D + 2 * T, -20],
+        [0, BASE],
+        [D + 2 * T, BASE],
         [D + 2 * T, gable(-T)],
         [0, gable(D + T)],
       ],
@@ -115,11 +140,13 @@ export function buildShell(M) {
 
   // Finestre, davanzali e bastoni delle tende
   for (const w of S.windows) sides.south.add(buildWindow(M, w));
+  sides.south.add(buildWindow(M, GROUND_WINDOW));
+  sides.south.add(buildEntryDoor(M));
 
   // Cassonetto / canna fumaria sul muro nord
   const ch = S.chimney;
-  const chimney = boxAt(M.plaster, ch.x0, 0, 0, ch.x1, S.mezzUnder, ch.depth);
-  info(chimney, 'Cassonetto a muro', `${ch.x1 - ch.x0} × ${ch.depth} cm, fino al soppalco`);
+  const chimney = boxAt(M.plaster, ch.x0, G, 0, ch.x1, S.mezzUnder, ch.depth);
+  info(chimney, 'Cassonetto a muro', `${ch.x1 - ch.x0} × ${ch.depth} cm, dal piano terra al soppalco`);
   sides.north.add(chimney);
 
   // Lesene del muro nord al livello del soppalco
@@ -138,16 +165,17 @@ export function buildShell(M) {
   info(g, 'Griglia di ripresa aria', '80 × 32 cm');
   sides.north.add(g);
 
-  // --- Pavimenti -------------------------------------------------------------
-  const floor = boxAt(M.tiles, 0, -4, 0, L, 0, D);
+  // --- Solaio del piano principale e pavimenti ----------------------------
+  const floor = new THREE.Mesh(prismGeo(SLAB_OUTLINE, -4, 0), M.tiles);
   floor.name = 'pavimento';
   info(floor, 'Pavimento', 'Gres porcellanato 60 × 60 cm grigio chiaro');
   shell.add(floor);
-  // basamento esterno per la vista assonometrica
-  const plinth = boxAt(M.steelMatte, -T - 20, -40, -T - 20, L + T + 20, -4.2, D + T + 20);
-  plinth.material = new THREE.MeshStandardMaterial({ color: '#8f8a84', roughness: 1 });
-  plinth.userData.noPick = true;
-  shell.add(plinth);
+  const slab = new THREE.Mesh(prismGeo(SLAB_OUTLINE, -S.ground.slab, -4), [M.plasterLight, M.steelMatte]);
+  info(slab, 'Solaio del piano principale', `Spessore ${S.ground.slab} cm, foro del vano scala ${SW.x1 - SW.x0} × ${SW.z1 - SW.z0} cm`);
+  shell.add(slab);
+
+  // --- Piano terra -------------------------------------------------------------
+  shell.add(buildGround(M, sides));
 
   // --- Tramezzo tra open space e servizi ------------------------------------
   shell.add(buildPartition(M));
@@ -156,6 +184,90 @@ export function buildShell(M) {
   shell.add(buildRoof(M));
 
   return shell;
+}
+
+// ---------------------------------------------------------------------------
+// Piano terra: atrio d'ingresso (ipotesi) e resto del piano come volume
+
+function buildGround(M, sides) {
+  const g = new THREE.Group();
+  g.name = 'piano terra';
+  const top = -S.ground.slab;
+  const hallFloor = boxAt(M.tiles, HALL.x0, G - 4, HALL.z0, HALL.x1, G, HALL.z1);
+  info(hallFloor, 'Pavimento dell\'atrio', 'Gres 60 × 60 cm come al piano principale (ipotesi)');
+  g.add(hallFloor);
+  // muro tra atrio e resto del piano terra
+  const wall = boxAt(M.plaster, HALL.x1, G, 0, HALL.x1 + 25, top, D);
+  info(wall, 'Muro dell\'atrio', 'Separa l\'ingresso dal resto del piano terra (ipotesi)');
+  wall.userData.side = 'east';
+  sides.east.add(wall);
+  // resto del piano terra: volume neutro, non rilevato
+  const mass = boxAt(M.massing, HALL.x1 + 25, G, 0, L, top, D);
+  mass.userData.massing = true;
+  mass.userData.noShadow = true;
+  info(mass, 'Resto del piano terra', 'Altre unità, non rilevate: volume indicativo');
+  g.add(mass);
+  // locale caldaia: gabbia in lamiera forata nell'angolo nord-est (foto 6)
+  g.add(boilerCage(M));
+  // fondazione, visibile nelle sezioni
+  const base = boxAt(M.massingBase, -T - 20, BASE - 20, -T - 20, L + T + 20, G - 4, D + T + 20);
+  base.userData.noPick = true;
+  g.add(base);
+  return g;
+}
+
+export const BOILER = { x0: 240, x1: HALL.x1, z0: 30, z1: 150 };
+
+function boilerCage(M) {
+  const c = BOILER;
+  const g = new THREE.Group();
+  g.name = 'caldaia';
+  const top = -S.ground.slab;
+  const b = new Batch();
+  for (const [x, z] of [
+    [c.x0, c.z0],
+    [c.x0, c.z1 - 4],
+    [c.x1 - 4, c.z1 - 4],
+  ]) {
+    b.add(boxGeoAt(x, G, z, x + 4, top, z + 4), M.steel);
+  }
+  for (const y of [G + 1, G + 220, top - 5]) {
+    b.add(boxGeoAt(c.x0, y, c.z1 - 4, c.x1, y + 4, c.z1), M.steel);
+    b.add(boxGeoAt(c.x0, y, c.z0, c.x0 + 4, y + 4, c.z1), M.steel);
+  }
+  // caldaia murale e canne fumarie fino al solaio
+  b.add(boxGeoAt(c.x1 - 36, G + 130, 62, c.x1 - 2, G + 215, 108), M.white);
+  for (const z of [72, 98]) b.add(cylGeoAt(c.x1 - 20, G + 215, z, 5, top - G - 215, 14), M.steelMatte);
+  b.add(cylGeoAt(c.x1 - 26, G, 50, 6, 150, 14), M.steelMatte);
+  g.add(b.build('Locale caldaia'));
+  g.add(boxAt(M.perforated, c.x0 + 1, G + 5, c.z0 + 4, c.x0 + 2, top - 5, c.z1 - 4));
+  g.add(boxAt(M.perforated, c.x0 + 4, G + 5, c.z1 - 2.5, c.x1 - 4, top - 5, c.z1 - 1.5));
+  info(g, 'Locale caldaia', 'Gabbia in ferro e lamiera forata, caldaia murale e canne fumarie (foto 6)');
+  return g;
+}
+
+// Portoncino d'ingresso in ferro e vetro, con sopraluce.
+function buildEntryDoor(M) {
+  const g = new THREE.Group();
+  g.name = 'Portoncino';
+  const b = new Batch();
+  const z0 = D + 20;
+  const z1 = D + 26;
+  const { x0, x1, h } = DOOR;
+  const p = 6;
+  b.add(boxGeoAt(x0, G, z0, x0 + p, G + h, z1), M.steel);
+  b.add(boxGeoAt(x1 - p, G, z0, x1, G + h, z1), M.steel);
+  b.add(boxGeoAt(x0, G + h - p, z0, x1, G + h, z1), M.steel);
+  b.add(boxGeoAt(x0 + p, G + 205, z0, x1 - p, G + 211, z1), M.steel);
+  b.add(boxGeoAt(x0 + p, G, z0, x1 - p, G + 12, z1), M.steel);
+  b.add(boxGeoAt(x0 + p, G + 100, z0 - 0.5, x1 - p, G + 104, z1), M.steel);
+  b.add(boxGeoAt(x1 - 16, G + 95, z0 - 6, x1 - 13, G + 125, z0 - 1), M.brushed);
+  g.add(b.build());
+  const glass = boxAt(M.windowGlass, x0 + p, G + 12, z0 + 2.5, x1 - p, G + h - p, z0 + 3.5);
+  glass.userData.noShadow = true;
+  g.add(glass);
+  info(g, 'Portoncino d\'ingresso', `${x1 - x0} × ${h} cm, ferro e vetro con sopraluce (posizione ipotizzata)`);
+  return g;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +384,7 @@ function buildPartition(M) {
   // anta scorrevole del ripostiglio, aperta davanti al muro
   const leaf = boxAt(M.white, x0 + 114, 1, zc + 5, x0 + 205, 209, zc + 8);
   info(leaf, 'Porta scorrevole ripostiglio', '90 × 210 cm');
+  leaf.userData.scenario = 'current';
   g.add(leaf);
   // soffitto dei servizi (intradosso del soppalco sopra la fascia est)
   return g;

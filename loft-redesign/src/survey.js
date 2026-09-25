@@ -43,22 +43,46 @@ export const S = {
   ],
   beamH: 22, // IPE 220
 
-  // --- Scala a spina centrale ---------------------------------------------
+  // --- Scala a spina centrale (piano principale → soppalco) ------------------
+  // Due gradini neri nell'angolo nord-ovest (foto 7), quattro gradini a
+  // ventaglio attorno al perno (85, 130), rampa verso est fino al filo 340.
   stair: {
     width: 85, // rilievo
     risers: 18, // 18 alzate da 18,3 cm
-    lowerFlightStartZ: 389, // stima: primo gradino accanto all'ascensore
+    pivot: [85, 130],
+    winders: 4,
+    // gradini a blocco: basso x 85-125, alto x 0-85 (foto 7, posa ricostruita)
+    block: { x1: 125, xMid: 85, z0: 28, z1: 130 },
   },
 
-  // --- Parapetto in mattoni e cancelletto ----------------------------------
-  // Il rilievo disegna il parapetto fino all'ascensore; qui si lascia il varco
-  // chiuso dal cancelletto curvo (foto 3 e 4), unico accesso plausibile alla scala.
-  // Verso nord prosegue sotto i gradini a ventaglio: nella foto 3 la testata
-  // compare subito dietro il pilastro.
-  parapet: { x: 85, t: 12, z0: 185, z1: 325, h: 115 },
+  // --- Parapetto in mattoni del vano scala -----------------------------------
+  // Dalla foto 7: corre continuo dalla gabbia d'arrivo fino ai gradini neri.
+  parapet: { x: 85, t: 12, z0: 130, z1: 389, h: 115 },
 
-  // --- Ascensore (angolo sud-ovest) ----------------------------------------
-  lift: { x0: 0, x1: 97, z0: 389, z1: 500, h: 245 },
+  // --- Vano scala verso il piano terra ----------------------------------------
+  // Foro nel solaio dietro il parapetto: vi sale la seconda rampa della scala
+  // dal piano terra, che sbarca nella gabbia in ferro dell'angolo sud-ovest.
+  stairwell: { x0: 0, x1: 85, z0: 212, z1: 389 },
+  arrival: { x0: 0, x1: 97, z0: 389, z1: 500, h: 245, door: { z0: 402, z1: 490 } },
+
+  // --- Piano terra (ipotesi: manca la pianta) ---------------------------------
+  // Interpiano 380 cm: 21 alzate da 18,1 cm, come si contano nella foto 6.
+  ground: {
+    level: -380,
+    slab: 30,
+    hall: { x0: 0, x1: 330, z0: 0, z1: 500 },
+    door: { x0: 15, x1: 105, h: 235 }, // portoncino d'ingresso sul muro sud
+  },
+  groundStair: {
+    risers: 21,
+    first: { x0: 105, x1: 195, zStart: 453, zEnd: 222, risers: 12 }, // sale verso nord
+    landing: { x0: 0, x1: 195, z0: 130, z1: 222 },
+    second: { x0: 0, x1: 85, zStart: 222, zEnd: 389, risers: 9 }, // sale verso sud
+  },
+
+  // --- Progetto: ampliamento del soppalco in vetro -----------------------------
+  // Pianta "soppalco con aggiunta": 160 × 97 cm dal pilastro 2 al filo dell'ala est.
+  glassExt: { x0: 722, x1: 870, z0: 212, z1: 309 },
 
   // --- Aperture ------------------------------------------------------------
   // Finestre ad arco a tutto sesto, telaio in ferro nero.
@@ -101,9 +125,12 @@ export function roofY(z) {
   return S.roofAtNorth + (S.roofAtSouth - S.roofAtNorth) * t;
 }
 
-// Altezza del gradino i (1..risers-1) e del piano di arrivo.
+// Alzata della scala del soppalco e di quella del piano terra (cm).
 export function riserH() {
-  return (S.mezzTop) / S.stair.risers;
+  return S.mezzTop / S.stair.risers;
+}
+export function groundRiserH() {
+  return -S.ground.level / S.groundStair.risers;
 }
 
 export const cm = (v) => v / 100;

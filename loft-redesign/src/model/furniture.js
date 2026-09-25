@@ -5,7 +5,10 @@
 import * as THREE from 'three';
 import { S } from '../survey.js';
 import { CM, boxAt, boxGeoAt, cylAt, cylGeoAt, rodGeo, tubeGeo, Batch, info, place } from '../lib/geo.js';
-import { shade } from './kitchen.js';
+import { shade, marbleTable } from './kitchen.js';
+import { curvedGate } from './structure.js';
+
+const G = S.ground.level;
 
 export function buildFurniture(M, lamps) {
   const g = new THREE.Group();
@@ -50,15 +53,18 @@ export function buildFurniture(M, lamps) {
   // dischi e piatti sul davanzale di W1 (foto 1)
   add(records(M), 250, 510, 0, 90).userData.side = 'south';
 
-  // --- Angolo nord-ovest: panca bassa e mensola con abat-jour -----------------
-  add(lowBench(M, 45, 80, 40), 26, 145);
+  // --- Angolo nord-ovest: mensola con abat-jour sopra i gradini neri --------
   const shelf = new Batch();
-  shelf.add(boxGeoAt(0, 92, 118, 22, 94, 160), M.walnutLight);
-  shelf.add(boxGeoAt(0, 82, 136, 3, 92, 142), M.steel);
+  shelf.add(boxGeoAt(0, 92, 63, 22, 94, 105), M.walnutLight);
+  shelf.add(boxGeoAt(0, 82, 81, 3, 92, 87), M.steel);
   const sh = shelf.build('Mensola');
   sh.userData.side = 'west';
   g.add(sh);
-  add(tableLamp(M, lamps, 11, 139, 94), 11, 139, 0, 94);
+  add(tableLamp(M, lamps, 11, 84, 94), 11, 84, 0, 94);
+
+  // --- Tavolino in marmo in cucina e cancelletto davanti al parapetto ------
+  add(marbleTable(M), 748, 318);
+  add(curvedGate(M), S.parapet.x + S.parapet.t + 1, 357);
 
   // Cornici sul muro ovest sopra il parapetto
   for (const [w, h, z, y] of [
@@ -76,14 +82,23 @@ export function buildFurniture(M, lamps) {
   // --- Soppalco: panche basse in ferro lungo il muro nord ---------------------
   add(lowBench(M, 300, 30, 42), 540, 20, 0, S.mezzTop).userData.level = 'mezz';
   add(lowBench(M, 200, 30, 42), 220, 20, 0, S.mezzTop).userData.level = 'mezz';
-  // tubo nero lungo il muro sud dell'ala est (foto soppalco 2)
-  const pipe = new THREE.Mesh(
-    tubeGeo([[S.mainLength + 30, S.mezzTop + 12, S.depth - 20], [1000, S.mezzTop + 12, S.depth - 24], [1080, S.mezzTop + 14, S.depth - 40], [1085, S.mezzTop + 40, S.depth - 60]], 9, 40, 12, 0.3),
-    M.steelMatte,
-  );
-  info(pipe, 'Tubo di aspirazione', 'Uscita della cappa, lungo il muro sud dell\'ala est');
-  pipe.userData.level = 'mezz';
-  g.add(pipe);
+
+  // --- Piano terra: atrio come nella foto 6 ---------------------------------
+  add(bambooChest(M), 24, 335, Math.PI / 2, G);
+  add(wireShelf(M), 0, 290, 0, G).userData.side = 'west';
+  for (const z of [420, 468]) add(rodLadder(M), 1, z, 0, G).userData.side = 'west';
+  for (const [w, h, z, y] of [
+    [34, 44, 250, 185],
+    [44, 34, 300, 150],
+    [36, 28, 372, 120],
+  ]) {
+    add(redFrame(M, w, h), 1, z, Math.PI / 2, G + y).userData.side = 'west';
+  }
+  add(lacquerScreen(M), 268, 318, 0, G);
+  add(perforatedFence(M, 125), 268, 425, 0, G);
+  const pend = add(enamelPendant(M, 22), 250, 330, 0, G + 262);
+  pend.userData.noCollide = true;
+  lamps.push({ x: 250, y: G + 262, z: 330, color: '#fff1dc', power: 1.4, dist: 6 });
 
   return g;
 }
@@ -234,6 +249,7 @@ function chromeUplight(M, lamps, x, z) {
   g.add(glow);
   lamps.push({ x, y: 190, z, color: '#fff0d6', power: 1.3, dist: 5 });
   info(g, 'Lampada da terra', 'Stelo cromato, luce indiretta verso il soffitto');
+  g.userData.foot = 14;
   return g;
 }
 
@@ -251,6 +267,7 @@ function arcLamp(M, lamps, x, z, rot) {
   const dz = Math.cos(rot) * 56;
   lamps.push({ x: x + dx, y: 150, z: z + dz, color: '#ffd9a0', power: 1, dist: 3.5 });
   info(g, 'Lampada ad arco', 'Stelo in ferro nero, paralume in vetro');
+  g.userData.foot = 13;
   return g;
 }
 
@@ -625,5 +642,121 @@ function curtain(M, top) {
   const g = new THREE.Group();
   g.add(m);
   info(g, 'Tenda', 'Tessuto paisley scuro');
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// Atrio del piano terra (foto 6)
+
+function bambooChest(M) {
+  const g = new THREE.Group();
+  const b = new Batch();
+  const w = 100;
+  const d = 45;
+  const h = 56;
+  b.add(boxGeoAt(-w / 2 + 2, 4, -d / 2 + 2, w / 2 - 2, h - 4, d / 2 - 2), M.wicker);
+  b.add(boxGeoAt(-w / 2, h - 5, -d / 2, w / 2, h, d / 2), M.wicker);
+  for (const [x, z] of [
+    [-w / 2 + 2, -d / 2 + 2],
+    [w / 2 - 2, -d / 2 + 2],
+    [-w / 2 + 2, d / 2 - 2],
+    [w / 2 - 2, d / 2 - 2],
+  ]) {
+    b.add(cylGeoAt(x, 2, z, 2.6, h - 2, 10), M.oakTrunk);
+  }
+  for (const x of [-w / 4, w / 4]) b.add(boxGeoAt(x - 3, h - 8, -d / 2 - 0.6, x + 3, h - 4, -d / 2), M.black);
+  g.add(b.build('Cassapanca'));
+  info(g, 'Cassapanca in bambù', `${w} × ${d} × ${h} cm`);
+  return g;
+}
+
+function wireShelf(M) {
+  const g = new THREE.Group();
+  const b = new Batch();
+  const z0 = -40;
+  const z1 = 40;
+  for (const y of [95, 128, 158, 188]) b.add(boxGeoAt(0, y, z0, 26, y + 1.2, z1), M.steel);
+  for (const z of [z0, z1]) b.add(rodGeo([1, 80, z], [1, 205, z], 0.6, 6), M.steel);
+  b.add(boxGeoAt(3, 159, -30, 9, 185, -18), M.tapeBlue);
+  b.add(cylGeoAt(14, 129, 18, 8, 12, 16, 9), M.teal);
+  g.add(b.build('Mensole a filo'));
+  info(g, 'Mensole in filo di ferro', '80 cm, quattro ripiani');
+  return g;
+}
+
+function rodLadder(M) {
+  const g = new THREE.Group();
+  const b = new Batch();
+  for (const z of [-21, 21]) b.add(rodGeo([2, 0, z], [2, 205, z], 0.9, 6), M.steel);
+  for (let y = 22; y < 205; y += 30) b.add(rodGeo([2, y, -21], [2, y, 21], 0.7, 6), M.steel);
+  for (const z of [-21, 21]) b.add(rodGeo([2, 203, z], [0, 203, z], 0.9, 6), M.steel);
+  g.add(b.build('Scaletta a muro'));
+  info(g, 'Scaletta portaoggetti', 'Tondino di ferro nero, a muro');
+  return g;
+}
+
+function redFrame(M, w, h) {
+  const g = new THREE.Group();
+  g.add(boxAt(M.red, -w / 2, 0, -1.5, w / 2, h, 0));
+  g.add(boxAt(M.paper, -w / 2 + 3, 3, -1.8, w / 2 - 3, h - 3, -1.5));
+  g.add(boxAt(M.poster, -w / 2 + 6, 6, -2, w / 2 - 6, h - 6, -1.8));
+  info(g, 'Fotografia d\'epoca', 'Cornice rossa');
+  return g;
+}
+
+function lacquerScreen(M) {
+  const g = new THREE.Group();
+  const lacquer = new THREE.MeshStandardMaterial({ color: '#c8471f', roughness: 0.3 });
+  const panel = 50;
+  const a = 0.38;
+  const b = new Batch();
+  // quattro ante a fisarmonica, centrate sull'origine
+  let px = (-4 * panel * Math.cos(a)) / 2;
+  let pz = 0;
+  for (let i = 0; i < 4; i++) {
+    const t = i % 2 === 0 ? a : -a;
+    const ex = px + panel * Math.cos(t);
+    const ez = pz + panel * Math.sin(t);
+    const geo = new THREE.BoxGeometry(panel * CM, 182 * CM, 2.4 * CM);
+    geo.rotateY(-t);
+    geo.translate(((px + ex) / 2) * CM, 95 * CM, ((pz + ez) / 2) * CM);
+    b.add(geo, lacquer);
+    px = ex;
+    pz = ez;
+  }
+  g.add(b.build('Paravento'));
+  info(g, 'Paravento cinese', 'Lacca rossa dipinta a fiori e aironi, quattro ante');
+  return g;
+}
+
+function perforatedFence(M, len) {
+  const g = new THREE.Group();
+  const b = new Batch();
+  const h = 112;
+  for (const x of [-len / 2, 0, len / 2]) b.add(boxGeoAt(x - 1.5, 0, -1.5, x + 1.5, h, 1.5), M.steel);
+  b.add(boxGeoAt(-len / 2, h - 3, -1.5, len / 2, h, 1.5), M.steel);
+  b.add(boxGeoAt(-len / 2, 12, -1.5, len / 2, 15, 1.5), M.steel);
+  g.add(b.build('Recinto'));
+  const perf = boxAt(M.perforated, -len / 2 + 2, 15, -0.5, len / 2 - 2, h - 3, 0.5);
+  g.add(perf);
+  info(g, 'Recinzione in lamiera forata', `Ferro nero, h ${h} cm`);
+  return g;
+}
+
+export function enamelPendant(M, r = 22, color = 'white') {
+  const g = new THREE.Group();
+  const mat = (color === 'black' ? M.steelMatte : M.enamel).clone();
+  mat.side = THREE.DoubleSide;
+  const pts = [
+    [1.2, 0],
+    [3, -1],
+    [r * 0.45, -r * 0.35],
+    [r * 0.85, -r * 0.62],
+    [r, -r * 0.7],
+  ].map(([a, c]) => new THREE.Vector2(a * CM, c * CM));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 36), mat));
+  g.add(cylAt(M.bulb, 0, -r * 0.55, 0, 4, 5, 12));
+  g.add(new THREE.Mesh(rodGeo([0, 0, 0], [0, 120, 0], 0.3, 4), M.black));
+  info(g, 'Sospensione smaltata', `Ø ${2 * r} cm`);
   return g;
 }
