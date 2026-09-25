@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Loft con soppalco</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --ground: #d6cfc5;
+        --panel: rgba(248, 245, 240, 0.93);
+        --panel-solid: #f8f5f0;
+        --ink: #221e1b;
+        --ink-2: #6a6058;
+        --ink-3: #978c82;
+        --line: #ddd4c9;
+        --chip: #ece6de;
+        --chip-hover: #e2dad0;
+        --active: #221e1b;
+        --active-ink: #f8f5f0;
+        --note: #9c4b30;
+        --focus: #2f6db5;
+        --shadow: 0 1px 2px rgba(34, 30, 27, 0.08), 0 10px 30px rgba(34, 30, 27, 0.12);
+        --font: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+        --mono: 'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          color-scheme: dark;
+          --ground: #1c1a18;
+          --panel: rgba(30, 28, 26, 0.92);
+          --panel-solid: #1e1c1a;
+          --ink: #efe8df;
+          --ink-2: #b1a79d;
+          --ink-3: #85796f;
+          --line: #3a3531;
+          --chip: #2c2926;
+          --chip-hover: #363230;
+          --active: #efe8df;
+          --active-ink: #1e1c1a;
+          --note: #e09a78;
+          --focus: #7fb0ea;
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --ground: #1c1a18;
+        --panel: rgba(30, 28, 26, 0.92);
+        --panel-solid: #1e1c1a;
+        --ink: #efe8df;
+        --ink-2: #b1a79d;
+        --ink-3: #85796f;
+        --line: #3a3531;
+        --chip: #2c2926;
+        --chip-hover: #363230;
+        --active: #efe8df;
+        --active-ink: #1e1c1a;
+        --note: #e09a78;
+        --focus: #7fb0ea;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--ground);
+        color: var(--ink);
+        font: 14px/1.4 var(--font);
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      #view {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        outline: none;
+      }
+      #labels {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      /* ------- Cartiglio ------- */
+      .titleblock {
+        position: absolute;
+        top: calc(16px + env(safe-area-inset-top, 0px));
+        left: 16px;
+        max-width: 340px;
+        padding: 14px 16px 12px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: var(--shadow);
+      }
+      .eyebrow {
+        font: 500 11px/1 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--note);
+      }
+      h1 {
+        margin: 6px 0 6px;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        text-wrap: balance;
+      }
+      .meta {
+        margin: 0;
+        font: 12px/1.5 var(--mono);
+        color: var(--ink-2);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ------- Pannello comandi ------- */
+      .panel {
+        position: absolute;
+        left: 16px;
+        top: calc(150px + env(safe-area-inset-top, 0px));
+        bottom: 16px;
+        width: 340px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px 16px 16px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: var(--shadow);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        box-sizing: border-box;
+        max-height: calc(100% - 166px - env(safe-area-inset-top, 0px));
+        height: max-content;
+      }
+      .group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .group h2 {
+        margin: 0;
+        font: 500 11px/1 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      .chip {
+        appearance: none;
+        border: 1px solid transparent;
+        background: var(--chip);
+        color: var(--ink);
+        border-radius: 4px;
+        padding: 7px 10px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-align: left;
+        transition: background-color 0.12s ease;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .chip:hover {
+        background: var(--chip-hover);
+      }
+      .chip[aria-pressed='true'] {
+        background: var(--active);
+        color: var(--active-ink);
+      }
+      .chip:focus-visible,
+      .switch input:focus-visible + span,
+      .iconbtn:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .chip .n {
+        font: 500 11px var(--mono);
+        opacity: 0.6;
+        min-width: 1ch;
+      }
+      .chip small {
+        display: block;
+        font-weight: 400;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .photo-chip {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+      }
+      .photo-chip .top {
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+      }
+      .span2 {
+        grid-column: span 2;
+      }
+      .toggles {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 10px;
+      }
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+      }
+      .switch span {
+        width: 26px;
+        height: 15px;
+        border-radius: 8px;
+        background: var(--line);
+        position: relative;
+        flex: none;
+        transition: background-color 0.12s ease;
+      }
+      .switch span::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--panel-solid);
+        transition: transform 0.12s ease;
+      }
+      .switch input:checked + span {
+        background: var(--active);
+      }
+      .switch input:checked + span::after {
+        transform: translateX(11px);
+      }
+      .note {
+        margin: 0;
+        font-size: 12px;
+        color: var(--ink-2);
+        line-height: 1.45;
+      }
+      .note b {
+        font-weight: 600;
+        color: var(--ink);
+      }
+      details.survey {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      details.survey summary {
+        cursor: pointer;
+        font: 500 11px/1 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        list-style: none;
+      }
+      details.survey summary::before {
+        content: '+ ';
+      }
+      details.survey[open] summary::before {
+        content: '− ';
+      }
+      .survey dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        margin: 10px 0 8px;
+        font-size: 12px;
+      }
+      .survey dt {
+        color: var(--ink-2);
+      }
+      .survey dd {
+        margin: 0;
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .survey p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--ink-2);
+        line-height: 1.45;
+      }
+
+      /* ------- Suggerimenti, info, caricamento ------- */
+      .hint {
+        position: absolute;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        max-width: min(460px, calc(100% - 32px));
+        padding: 8px 12px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--ink-2);
+        box-shadow: var(--shadow);
+      }
+      .hint kbd {
+        font: 500 11px var(--mono);
+        padding: 1px 5px;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        background: var(--chip);
+        color: var(--ink);
+      }
+      .infocard {
+        position: absolute;
+        right: 16px;
+        top: calc(16px + env(safe-area-inset-top, 0px));
+        width: min(300px, calc(100% - 32px));
+        padding: 12px 14px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: var(--shadow);
+      }
+      .infocard h3 {
+        margin: 0 24px 4px 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .infocard p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+      .infocard .coords {
+        margin-top: 8px;
+        font: 11px var(--mono);
+        color: var(--ink-3);
+      }
+      .iconbtn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 26px;
+        height: 26px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        color: var(--ink-2);
+        font-size: 18px;
+        line-height: 1;
+      }
+      .iconbtn:hover {
+        background: var(--chip);
+      }
+      .loading {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: var(--ground);
+        color: var(--ink-2);
+        font: 13px var(--mono);
+        letter-spacing: 0.04em;
+        z-index: 5;
+      }
+      .walkpad {
+        position: absolute;
+        left: 50%;
+        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        display: flex;
+        gap: 10px;
+      }
+      .walkpad .chip {
+        padding: 12px 18px;
+        font-size: 15px;
+        touch-action: none;
+      }
+      .crosshair {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 14px;
+        height: 14px;
+        margin: -7px 0 0 -7px;
+        pointer-events: none;
+        opacity: 0.8;
+      }
+      .crosshair::before,
+      .crosshair::after {
+        content: '';
+        position: absolute;
+        background: #fff;
+        mix-blend-mode: difference;
+      }
+      .crosshair::before {
+        left: 6px;
+        top: 0;
+        width: 2px;
+        height: 14px;
+      }
+      .crosshair::after {
+        top: 6px;
+        left: 0;
+        width: 14px;
+        height: 2px;
+      }
+
+      /* Etichette 3D */
+      .tag {
+        font: 600 12px/1.2 var(--font);
+        color: var(--ink);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 3px 7px;
+        white-space: nowrap;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .tag span {
+        display: block;
+        font: 400 11px var(--mono);
+        color: var(--ink-2);
+      }
+      .dim {
+        font: 500 12px var(--mono);
+        color: var(--note);
+        background: var(--panel-solid);
+        padding: 1px 4px;
+        border-radius: 2px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .measure {
+        font: 500 13px var(--mono);
+        color: #fff;
+        background: #c2410c;
+        padding: 3px 7px;
+        border-radius: 3px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .measure small {
+        display: block;
+        font-size: 10px;
+        opacity: 0.85;
+      }
+
+      .sheet-toggle {
+        display: none;
+      }
+
+      /* ------- Telefono ------- */
+      @media (max-width: 720px) {
+        .titleblock {
+          left: 12px;
+          right: 12px;
+          max-width: none;
+          padding: 10px 12px;
+        }
+        h1 {
+          font-size: 18px;
+          margin: 4px 0 2px;
+        }
+        .meta {
+          font-size: 11px;
+        }
+        .panel {
+          left: 0;
+          right: 0;
+          top: auto;
+          bottom: 0;
+          width: auto;
+          max-height: 58%;
+          border-radius: 12px 12px 0 0;
+          border-bottom: 0;
+          padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        }
+        .panel[data-collapsed='true'] {
+          display: none;
+        }
+        .sheet-toggle {
+          display: flex;
+          position: absolute;
+          left: 12px;
+          bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+          box-shadow: var(--shadow);
+        }
+        .panel:not([data-collapsed='true']) ~ .sheet-toggle {
+          display: none;
+        }
+        .hint {
+          display: none;
+        }
+        .infocard {
+          top: auto;
+          bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+          right: 12px;
+        }
+        .meta .extra {
+          display: none;
+        }
+        .tag {
+          font-size: 11px;
+          padding: 2px 5px;
+        }
+        .tag span {
+          display: none;
+        }
+        .dim {
+          font-size: 11px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view" tabindex="0" aria-label="Modello 3D del loft"></canvas>
+      <div id="labels"></div>
+      <div class="crosshair" id="crosshair" hidden></div>
+
+      <header class="titleblock">
+        <div class="eyebrow">Stato di fatto · rilievo 3D</div>
+        <h1>Loft con soppalco</h1>
+        <p class="meta">Open space 8,70 × 5,00 m · soppalco +3,30 m<span class="extra"><br />Falda in abete da 4,30 a 6,19 m</span></p>
+      </header>
+
+      <nav class="panel" id="panel" aria-label="Comandi del modello">
+        <section class="group">
+          <h2>Viste</h2>
+          <div class="grid2">
+            <button class="chip span2" data-view="axo" aria-pressed="true">Assonometria</button>
+            <button class="chip" data-view="planGround">Pianta piano</button>
+            <button class="chip" data-view="planMezz">Pianta soppalco</button>
+            <button class="chip" data-view="section">Sezione lunga</button>
+            <button class="chip" data-view="sectionX">Sezione corta</button>
+          </div>
+        </section>
+
+        <section class="group">
+          <h2>Come nelle foto</h2>
+          <div class="grid2">
+            <button class="chip photo-chip" data-view="p1"><span class="top"><span class="n">1</span>Verso la cucina</span></button>
+            <button class="chip photo-chip" data-view="p2"><span class="top"><span class="n">2</span>La cucina</span></button>
+            <button class="chip photo-chip" data-view="p3"><span class="top"><span class="n">3</span>Verso la scala</span></button>
+            <button class="chip photo-chip" data-view="p4"><span class="top"><span class="n">4</span>Tavolo e scala</span></button>
+            <button class="chip photo-chip" data-view="m1"><span class="top"><span class="n">5</span>Soppalco, verso la cucina</span></button>
+            <button class="chip photo-chip" data-view="m2"><span class="top"><span class="n">6</span>Soppalco, verso l'ascensore</span></button>
+          </div>
+        </section>
+
+        <section class="group">
+          <h2>Mostra</h2>
+          <div class="toggles">
+            <label class="switch"><input type="checkbox" id="t-roof" checked /><span></span>Tetto</label>
+            <label class="switch"><input type="checkbox" id="t-mezz" checked /><span></span>Soppalco</label>
+            <label class="switch"><input type="checkbox" id="t-furn" checked /><span></span>Arredi attuali</label>
+            <label class="switch"><input type="checkbox" id="t-labels" /><span></span>Nomi e quote</label>
+          </div>
+        </section>
+
+        <section class="group">
+          <h2>Luce</h2>
+          <div class="grid2">
+            <button class="chip" data-light="day" aria-pressed="true">Giorno</button>
+            <button class="chip" data-light="evening">Sera, lampade accese</button>
+          </div>
+          <label class="switch"><input type="checkbox" id="t-ao" /><span></span>Ombre morbide (più lento)</label>
+        </section>
+
+        <section class="group">
+          <h2>Strumenti</h2>
+          <div class="grid2">
+            <button class="chip" id="b-measure" aria-pressed="false">Metro</button>
+            <button class="chip" id="b-walk" aria-pressed="false">Passeggia</button>
+          </div>
+          <p class="note" id="tool-note">Tocca un elemento per leggerne le misure.</p>
+        </section>
+
+        <details class="survey">
+          <summary>Dati del rilievo</summary>
+          <dl>
+            <dt>Open space</dt>
+            <dd>870 × 500 cm</dd>
+            <dt>Fascia servizi</dt>
+            <dd>215 × 500 cm</dd>
+            <dt>Altezza sotto soppalco</dt>
+            <dd>307 cm</dd>
+            <dt>Profondità soppalco</dt>
+            <dd>210–215 cm</dd>
+            <dt>Corridoio e scala</dt>
+            <dd>130 + 85 cm</dd>
+            <dt>Sotto falda (dal soppalco)</dt>
+            <dd>250 · 283 · 207 · 100</dd>
+            <dt>Alzate scala</dt>
+            <dd>18 × 18,3 cm</dd>
+          </dl>
+          <p>Stime da verificare in sopralluogo: finestre (110 × 275 cm, davanzale 90), spessore del soppalco (23 cm), accesso alla scala dal cancelletto, parapetto in mattoni prolungato sotto i gradini a ventaglio, arredo del bagno.</p>
+          <p>I canali neri dell'aria visibili nella foto 1 non compaiono nelle altre foto e non sono nel modello.</p>
+        </details>
+      </nav>
+      <button class="chip sheet-toggle" id="sheet-toggle" aria-controls="panel">Viste e strumenti</button>
+
+      <aside class="infocard" id="info" hidden aria-live="polite">
+        <button class="iconbtn" id="info-close" aria-label="Chiudi">×</button>
+        <h3 id="info-title"></h3>
+        <p id="info-detail"></p>
+        <div class="coords" id="info-coords"></div>
+      </aside>
+
+      <div class="hint" id="hint"></div>
+      <div class="walkpad" id="walkpad" hidden>
+        <button class="chip" data-walk="fwd" aria-label="Avanti">▲ Avanti</button>
+        <button class="chip" data-walk="back" aria-label="Indietro">▼ Indietro</button>
+        <button class="chip" data-walk="exit">Esci</button>
+      </div>
+      <div class="loading" id="loading">Preparo il modello…</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
